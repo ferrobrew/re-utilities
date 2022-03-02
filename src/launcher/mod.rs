@@ -8,45 +8,35 @@ use dll_syringe::process::{OwnedProcess, Process};
 
 pub fn launch_and_inject(
     process_name: &str,
-    spawner: impl Fn() -> anyhow::Result<(OwnedProcess, Option<spawn::ThreadResumer>)>,
+    spawner: impl Fn() -> anyhow::Result<OwnedProcess>,
     payload_name: &str,
-    resume_after_injection: bool,
     inject_into_running_process: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<OwnedProcess> {
     let payload_path = std::env::current_exe()?
         .parent()
         .context("failed to find launcher executable directory")?
         .join(payload_name);
 
-    let found_process = if inject_into_running_process {
-        OwnedProcess::find_first_by_name(process_name)
-    } else {
-        None
-    };
-    let (process, main_thread) = match found_process {
-        Some(process) => (process, None),
+    let found_process = inject_into_running_process
+        .then(|| process_name)
+        .and_then(OwnedProcess::find_first_by_name);
+    let process = match found_process {
+        Some(process) => process,
         None => spawner()?,
     };
     let result = injector::inject(process.borrowed(), &payload_path);
-    match (result.is_ok(), resume_after_injection, main_thread) {
-        (true, true, Some(main_thread)) => {
-            main_thread.resume();
-        }
-        (false, ..) => {
-            let _ = process.kill();
-        }
-        _ => {}
+    if result.is_err() {
+        let _ = process.kill();
     }
-    result
+    result.map(|_| process)
 }
 
 pub fn launch_steam_process_and_inject(
     app_id: u32,
     executable_path_builder: fn(&Path) -> PathBuf,
     payload_name: &str,
-    resume_after_injection: bool,
     inject_into_running_process: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<OwnedProcess> {
     let process_name = executable_path_builder(Path::new(""))
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
@@ -55,9 +45,8 @@ pub fn launch_steam_process_and_inject(
 
     launch_and_inject(
         &process_name,
-        || spawn::steam_process(app_id, executable_path_builder, true),
+        || spawn::steam_process(app_id, executable_path_builder),
         payload_name,
-        resume_after_injection,
         inject_into_running_process,
     )
 }

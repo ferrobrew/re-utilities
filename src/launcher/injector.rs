@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use dll_syringe::{
-    process::{BorrowedProcess, BorrowedProcessModule, ProcessModule, OwnedProcess},
+    process::{BorrowedProcess, BorrowedProcessModule, ProcessModule},
     Syringe,
 };
 
@@ -38,7 +38,7 @@ pub fn inject(process: BorrowedProcess, payload_path: &Path) -> anyhow::Result<(
     };
 
     // eject
-    if let Ok(Some(process_module)) = ProcessModule::find(&injected_payload_path, process) {
+    if let Some(process_module) = ProcessModule::find_by_name(&injected_payload_path, process)? {
         call_procedure(&syringe, process_module, "unload")?;
         syringe.eject(process_module)?;
     }
