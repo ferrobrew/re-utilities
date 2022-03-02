@@ -44,17 +44,16 @@ pub fn steam_process(
     app_id: u32,
     executable_path_builder: fn(&Path) -> PathBuf,
 ) -> anyhow::Result<OwnedProcess> {
-    let game_path = steamlocate::SteamDir::locate()
-        .context("failed to locate steamdir")?
-        .app(&app_id)
-        .context("failed to locate app")?
+    let app_id = app_id.to_string();
+    let game_path = game_scanner::steam::find(&app_id)?
         .path
+        .context("failed to locate app")?
         .clone();
     let executable_path = executable_path_builder(&game_path);
 
     let env_vars = ["SteamGameId", "SteamAppId"]
         .iter()
-        .map(|s| (s.to_string(), app_id.to_string()));
+        .map(|s| (s.to_string(), app_id.clone()));
 
     arbitrary_process(&game_path, &executable_path, env_vars)
 }

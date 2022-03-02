@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.55"
 dll-syringe = "0.7.0"
-steamlocate = "1.0.1"
+game-scanner = "1.1.0"
 
 [dependencies.windows]
 version = "0.33.0"
