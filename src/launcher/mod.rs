@@ -31,17 +31,23 @@ pub fn launch_and_inject(
     result.map(|_| process)
 }
 
+pub fn get_executable_name_from_builder(
+    executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
+) -> Option<String> {
+    executable_path_builder(Path::new(""))
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(ToString::to_string)
+}
+
 pub fn launch_steam_process_and_inject(
     app_id: u32,
-    executable_path_builder: fn(&Path) -> PathBuf,
+    executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
     payload_name: &str,
     inject_into_running_process: bool,
 ) -> anyhow::Result<OwnedProcess> {
-    let process_name = executable_path_builder(Path::new(""))
-        .file_name()
-        .and_then(std::ffi::OsStr::to_str)
-        .context("failed to get executable filename")?
-        .to_owned();
+    let process_name = get_executable_name_from_builder(executable_path_builder)
+        .context("failed to get executable filename")?;
 
     launch_and_inject(
         &process_name,

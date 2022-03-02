@@ -42,7 +42,7 @@ pub fn arbitrary_process(
 
 pub fn steam_process(
     app_id: u32,
-    executable_path_builder: fn(&Path) -> PathBuf,
+    executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
 ) -> anyhow::Result<OwnedProcess> {
     let app_id = app_id.to_string();
     let game_path = game_scanner::steam::find(&app_id)?
@@ -56,4 +56,20 @@ pub fn steam_process(
         .map(|s| (s.to_string(), app_id.clone()));
 
     arbitrary_process(&game_path, &executable_path, env_vars)
+}
+
+pub fn egs_process(
+    app_id: &str,
+    executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
+) -> anyhow::Result<OwnedProcess> {
+    let game_path = game_scanner::epicgames::find(&app_id)?
+        .path
+        .context("failed to locate app")?
+        .clone();
+    let executable_path = executable_path_builder(&game_path);
+
+    // TODO: Make this actually work. Turns out EGS requires you to pass in
+    // an authentication token via the parameters, ughhhhh:
+    // https://github.com/derrod/legendary/blob/d7360eef3e2ed5816da5549d71d5bce57e129df3/legendary/core.py#L662
+    arbitrary_process(&game_path, &executable_path, std::iter::empty())
 }
