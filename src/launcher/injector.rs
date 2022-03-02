@@ -21,7 +21,7 @@ pub fn call_procedure(
 pub fn inject(process: BorrowedProcess, payload_path: &Path) -> anyhow::Result<()> {
     let syringe = Syringe::for_process(process.try_to_owned()?);
 
-    let injected_payload_path = {
+    let (injected_payload_path, injected_payload_filename) = {
         let decompose_filename = |filename: &Path| {
             Some((
                 filename.file_stem()?.to_str()?.to_owned(),
@@ -32,15 +32,18 @@ pub fn inject(process: BorrowedProcess, payload_path: &Path) -> anyhow::Result<(
         let (stem, extension) =
             decompose_filename(payload_path).context("failed to decompose filename")?;
 
-        payload_path
-            .with_file_name(format!("{}_loaded", stem))
-            .with_extension(extension)
+        let injected_payload_filename = Path::new(&(stem + "_loaded")).with_extension(extension);
+
+        (
+            payload_path.with_file_name(&injected_payload_filename),
+            injected_payload_filename,
+        )
     };
 
     // eject
-    if let Some(process_module) = ProcessModule::find_by_name(&injected_payload_path, process)? {
-        call_procedure(&syringe, process_module, "unload")?;
-        syringe.eject(process_module)?;
+    if let Some(pm) = ProcessModule::find_by_name(&injected_payload_filename, process)? {
+        call_procedure(&syringe, pm, "unload")?;
+        syringe.eject(pm)?;
     }
 
     // inject
