@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.55"
-dll-syringe = "0.7.0"
+dll-syringe = "0.8.1"
 game-scanner = "1.1.2"
 
 [dependencies.windows]
