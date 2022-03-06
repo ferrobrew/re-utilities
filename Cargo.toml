@@ -6,8 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.55"
 dll-syringe = "0.7.0"
-# Temporary until https://github.com/EqualGames/game-scanner/pull/19 gets merged
-game-scanner = { git = "https://github.com/philpax/game-scanner.git", branch = "fix-build-script" }
+game-scanner = "1.1.2"
 
 [dependencies.windows]
 version = "0.33.0"
