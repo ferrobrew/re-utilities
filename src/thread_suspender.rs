@@ -83,6 +83,11 @@ impl ThreadSuspender {
             unsafe { CloseHandle(handle) };
         }
     }
+
+    pub fn for_block<T>(mut f: impl FnMut() -> anyhow::Result<T>) -> anyhow::Result<T> {
+        let _suspender = ThreadSuspender::new()?;
+        f()
+    }
 }
 
 impl Drop for ThreadSuspender {
