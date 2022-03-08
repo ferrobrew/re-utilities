@@ -47,8 +47,7 @@ pub fn steam_process(
     let app_id = app_id.to_string();
     let game_path = game_scanner::steam::find(&app_id)?
         .path
-        .context("failed to locate app")?
-        .clone();
+        .context("failed to locate app")?;
     let executable_path = executable_path_builder(&game_path);
 
     let env_vars = ["SteamGameId", "SteamAppId"]
@@ -62,10 +61,9 @@ pub fn egs_process(
     app_id: &str,
     executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
 ) -> anyhow::Result<OwnedProcess> {
-    let game_path = game_scanner::epicgames::find(&app_id)?
+    let game_path = game_scanner::epicgames::find(app_id)?
         .path
-        .context("failed to locate app")?
-        .clone();
+        .context("failed to locate app")?;
     let executable_path = executable_path_builder(&game_path);
 
     // TODO: Make this actually work. Turns out EGS requires you to pass in

@@ -218,6 +218,8 @@ impl Module {
             .map(|s| s.to_string())
     }
 
+    // consider making these unsafe?
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn abs_to_rel_addr(&self, p: *const u8) -> isize {
         unsafe { p.offset_from(self.base) }
     }

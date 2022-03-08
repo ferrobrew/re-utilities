@@ -53,15 +53,12 @@ impl Args {
                     } else {
                         return Err(Error::new_spanned(
                             nv.path.clone(),
-                            format!("unknown attribute"),
+                            "unknown attribute".to_string(),
                         ));
                     }
                 }
                 arg => {
-                    return Err(Error::new_spanned(
-                        arg.clone(),
-                        format!("unknown attribute"),
-                    ));
+                    return Err(Error::new_spanned(arg, "unknown attribute".to_string()));
                 }
             }
         }
@@ -95,10 +92,7 @@ pub fn detour(
     let signature = detour.sig.clone();
     let function_name = Ident::new(&signature.ident.to_string(), Span::call_site());
     let detour_name = Ident::new(&function_name.to_string().to_uppercase(), Span::call_site());
-    let binder_name = Ident::new(
-        &format!("{}_BINDER", detour_name.to_string()),
-        Span::call_site(),
-    );
+    let binder_name = Ident::new(&format!("{}_BINDER", detour_name), Span::call_site());
     let detour_type = TypeBareFn {
         lifetimes: None,
         unsafety: signature.unsafety,
