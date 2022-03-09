@@ -121,14 +121,14 @@ pub fn detour(
     };
 
     quote! {
-        use ::re_utilities::detour_binder::DetourBinder;
+        use ::re_utilities::detour_binder::StaticDetourBinder;
         use ::detour::static_detour;
 
         static_detour! {
             #visibility static #detour_name: #detour_type;
         }
 
-        #visibility static #binder_name: DetourBinder = DetourBinder {
+        #visibility static #binder_name: StaticDetourBinder = StaticDetourBinder {
             bind: &|module| {
                 use anyhow::Context;
                 use std::mem;
