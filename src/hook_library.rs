@@ -8,6 +8,7 @@ pub struct HookLibrary {
     owned_binders: Vec<NonstaticDetourBinder>,
 
     inits: Vec<Box<dyn Fn(&mut Module) -> anyhow::Result<()>>>,
+    shutdowns: Vec<Box<dyn Fn() -> anyhow::Result<()>>>,
     enablers: Vec<Box<dyn Fn() -> anyhow::Result<()>>>,
     disablers: Vec<Box<dyn Fn() -> anyhow::Result<()>>>,
 }
@@ -20,6 +21,7 @@ impl HookLibrary {
             owned_binders: vec![],
 
             inits: vec![],
+            shutdowns: vec![],
             enablers: vec![],
             disablers: vec![],
         }
@@ -56,6 +58,11 @@ impl HookLibrary {
         init_fn: impl Fn(&mut Module) -> anyhow::Result<()> + 'static,
     ) -> Self {
         self.inits.push(Box::new(init_fn));
+        self
+    }
+
+    pub fn on_shutdown(mut self, shutdown_fn: impl Fn() -> anyhow::Result<()> + 'static) -> Self {
+        self.shutdowns.push(Box::new(shutdown_fn));
         self
     }
 
@@ -111,5 +118,13 @@ impl HookLibrary {
 impl Default for HookLibrary {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for HookLibrary {
+    fn drop(&mut self) {
+        for shutdown_fn in &self.shutdowns {
+            (shutdown_fn)().unwrap();
+        }
     }
 }
