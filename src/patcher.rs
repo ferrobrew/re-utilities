@@ -1,12 +1,14 @@
 use super::util;
-use std::{ptr, slice};
-use windows::Win32::System::Memory::{
-    VirtualProtect, PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS,
-};
 
 struct Patch {
     address: *mut u8,
-    original_bytes: Vec<u8>,
+    original_bytes: Box<[u8]>,
+}
+
+impl Patch {
+    fn original_bytes(&self) -> &[u8] {
+        &*self.original_bytes
+    }
 }
 
 pub struct Patcher {
@@ -18,23 +20,24 @@ impl Patcher {
         Patcher { patches: vec![] }
     }
 
-    pub unsafe fn safe_write(&self, addr_ptr: *mut u8, bytes: &[u8]) {
+    pub unsafe fn safe_write(&self, ptr: *mut u8, bytes: &[u8]) {
+        use windows::Win32::System::Memory::{
+            VirtualProtect, PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS,
+        };
+
         let mut old: PAGE_PROTECTION_FLAGS = Default::default();
-        VirtualProtect(
-            addr_ptr as *const _,
-            bytes.len() as _,
-            PAGE_EXECUTE_READWRITE,
-            &mut old,
-        );
-        ptr::copy(bytes.as_ptr(), addr_ptr, bytes.len());
-        VirtualProtect(addr_ptr as *mut _, bytes.len() as _, old, &mut old);
+        let len = bytes.len();
+
+        VirtualProtect(ptr as _, len, PAGE_EXECUTE_READWRITE, &mut old);
+        std::slice::from_raw_parts_mut(ptr, len).copy_from_slice(bytes);
+        VirtualProtect(ptr as _, len, old, &mut old);
     }
 
     pub unsafe fn patch(&mut self, address: usize, bytes: &[u8]) {
         let addr_ptr = util::make_ptr::<u8>(address);
         self.patches.push(Patch {
             address: addr_ptr,
-            original_bytes: slice::from_raw_parts(addr_ptr, bytes.len()).to_vec(),
+            original_bytes: std::slice::from_raw_parts(addr_ptr, bytes.len()).into(),
         });
 
         self.safe_write(addr_ptr, bytes)
@@ -65,9 +68,8 @@ impl Patcher {
 impl Drop for Patcher {
     fn drop(&mut self) {
         for patch in self.patches.iter().rev() {
-            let bytes = &patch.original_bytes;
             unsafe {
-                self.safe_write(patch.address, bytes);
+                self.safe_write(patch.address, patch.original_bytes());
             }
         }
     }
