@@ -7,9 +7,14 @@ use syn::{
     Meta, NestedMeta, Result, TypeBareFn,
 };
 
+enum Address {
+    Signature(String),
+    Address(usize),
+}
+
 struct Args {
     pub name: syn::LitStr,
-    pub pattern: syn::LitStr,
+    pub address: Address,
 }
 
 lazy_static! {
@@ -20,7 +25,7 @@ lazy_static! {
 impl Args {
     fn new(args: AttributeArgs) -> Result<Self> {
         let mut name = None;
-        let mut pattern = None;
+        let mut address = None;
 
         for arg in args {
             match arg {
@@ -35,13 +40,43 @@ impl Args {
                             ));
                         }
                     } else if nv.path.is_ident("pattern") {
+                        if address.is_some() {
+                            return Err(Error::new_spanned(
+                                nv.path,
+                                "address has already been specified",
+                            ));
+                        }
+
                         if let Lit::Str(lit) = nv.lit {
                             if PATTERN_REGEX.is_match(&lit.value()) {
-                                pattern = Some(lit.clone());
+                                address = Some(Address::Signature(lit.value().to_owned()));
                             } else {
                                 return Err(Error::new_spanned(
                                     lit,
                                     "`pattern` is invalid, does not match pattern format (`DE ? BE EF`)",
+                                ));
+                            }
+                        } else {
+                            return Err(Error::new_spanned(
+                                nv.lit,
+                                "`pattern` must be literal string",
+                            ));
+                        }
+                    } else if nv.path.is_ident("address") {
+                        if address.is_some() {
+                            return Err(Error::new_spanned(
+                                nv.path,
+                                "address has already been specified",
+                            ));
+                        }
+
+                        if let Lit::Int(lit) = nv.lit {
+                            if let Ok(value) = lit.base10_parse() {
+                                address = Some(Address::Address(value));
+                            } else {
+                                return Err(Error::new_spanned(
+                                    lit,
+                                    "`address` is an invalid integer",
                                 ));
                             }
                         } else {
@@ -65,7 +100,7 @@ impl Args {
 
         Ok(Self {
             name: name.expect("missing `name` attribute"),
-            pattern: pattern.expect("missing `pattern` attribute"),
+            address: address.expect("missing `address` attribute"),
         })
     }
 }
@@ -83,7 +118,6 @@ pub fn detour(
 
     // Extract input
     let detour = parse_macro_input!(input as ItemFn);
-    let pattern = args.pattern;
     let error_string = LitStr::new(
         &format!("failed to find {}", args.name.value()),
         Span::call_site(),
@@ -120,23 +154,26 @@ pub fn detour(
         output: signature.output,
     };
 
-    quote! {
-        use ::re_utilities::detour_binder::StaticDetourBinder;
-        use ::detour::static_detour;
+    let address_block = match args.address {
+        Address::Signature(signature) => quote! {
+            use anyhow::Context;
+            let address = module.scan(#signature).context(#error_string)?;
+        },
+        Address::Address(address) => quote! {
+            let address = #address;
+        },
+    };
 
+    quote! {
         static_detour! {
             #visibility static #detour_name: #detour_type;
         }
 
-        #visibility static #binder_name: StaticDetourBinder = StaticDetourBinder {
+        #visibility static #binder_name: ::re_utilities::detour_binder::StaticDetourBinder = ::re_utilities::detour_binder::StaticDetourBinder {
             bind: &|module| {
-                use anyhow::Context;
-                use std::mem;
-                let address = module
-                    .scan(#pattern)
-                    .context(#error_string)?;
                 unsafe {
-                    #detour_name.initialize(mem::transmute(address), #function_name)?;
+                    #address_block
+                    #detour_name.initialize(::std::mem::transmute(address), #function_name)?;
                 }
                 Ok(())
             },
