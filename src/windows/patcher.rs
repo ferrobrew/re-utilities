@@ -1,4 +1,4 @@
-use super::util;
+use crate::util;
 
 struct Patch {
     address: *mut u8,
