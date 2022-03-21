@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.56"
+syn = "1.0.89"
 patternscan = "1.2.0"
+proc-macro2 = { version = "1.0.36", features = ["span-locations"] }
 
 [features]
 debug-console = []
