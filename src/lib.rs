@@ -1,12 +1,10 @@
-#![cfg(target_os = "windows")]
-pub mod detour_binder;
-pub mod hook_library;
-pub mod launcher;
-pub mod module;
+#[cfg(feature = "type_language")]
+pub mod type_language;
+
 pub mod util;
 
-mod patcher;
-mod thread_suspender;
+#[cfg(target_os = "windows")]
+mod windows;
 
-pub use patcher::Patcher;
-pub use thread_suspender::ThreadSuspender;
+#[cfg(target_os = "windows")]
+pub use crate::windows::*;
