@@ -1,20 +1,20 @@
 [package]
+edition = "2021"
 name = "detours-macro"
 version = "0.1.0"
-edition = "2021"
 
 [lib]
 proc-macro = true
 
 [dependencies]
 anyhow = "1.0.55"
-regex = "1.5.4"
+lazy_static = "1.4.0"
 proc-macro2 = "1.0.36"
 quote = "1.0.15"
-lazy_static = "1.4.0"
+regex = "1.5.4"
 
-re-utilities = { path = "../" }
+re-utilities = {path = "../"}
 
 [dependencies.syn]
-version = "1.0.86"
 features = ["full"]
+version = "1.0.86"

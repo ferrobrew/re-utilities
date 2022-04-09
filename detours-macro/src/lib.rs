@@ -150,8 +150,17 @@ pub fn detour(
                 }
             })
             .collect(),
-        variadic: signature.variadic,
-        output: signature.output,
+        variadic: signature.variadic.clone(),
+        output: signature.output.clone(),
+    };
+
+    // Remove the ABI from the detour-handler, detour-rs handles that for us
+    let detour = ItemFn {
+        sig: syn::Signature {
+            abi: None,
+            ..signature
+        },
+        ..detour
     };
 
     let address_block = match args.address {
