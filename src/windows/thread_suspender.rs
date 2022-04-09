@@ -1,6 +1,6 @@
 use std::mem;
 
-use anyhow::{anyhow, Result};
+use anyhow::Context;
 use windows::Win32::{
     Foundation::{CloseHandle, BOOL, HANDLE},
     System::{
@@ -19,13 +19,12 @@ pub struct ThreadSuspender {
 }
 
 impl ThreadSuspender {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         let process_id = unsafe { GetCurrentProcessId() };
-        let handle = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id) };
-
-        if handle.is_invalid() {
-            return Err(anyhow!("failed to create snapshot of process"));
-        }
+        let handle = unsafe {
+            CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id)
+                .context("failed to create snapshot of process")?
+        };
 
         fn from_snapshot<Value: Default + Copy + Sized>(
             handle: HANDLE,
@@ -54,7 +53,7 @@ impl ThreadSuspender {
                 thread.th32OwnerProcessID == process_id && thread.th32ThreadID != thread_id
             })
             .map(|thread| unsafe { OpenThread(THREAD_ALL_ACCESS, false, thread.th32ThreadID) })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Self::suspend(&threads);
         Ok(Self { threads })

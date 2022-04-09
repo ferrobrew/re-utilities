@@ -10,12 +10,13 @@ pub fn call_procedure(
     syringe: &Syringe,
     process_module: BorrowedProcessModule,
     procedure_name: &str,
-) -> anyhow::Result<u64> {
-    let procedure = syringe
-        .get_procedure(process_module, procedure_name)?
-        .context(format!("failed to find function: {}", procedure_name))?;
-
-    Ok(procedure.call(&0_u64)?)
+) -> anyhow::Result<()> {
+    unsafe {
+        Ok(syringe
+            .get_raw_procedure::<extern "system" fn()>(process_module, procedure_name)?
+            .context("failed to get function")?
+            .call()?)
+    }
 }
 
 pub fn inject(process: BorrowedProcess, payload_path: &Path) -> anyhow::Result<()> {

@@ -3,15 +3,12 @@ use std::{
     path::Path, slice,
 };
 
-use windows::{
-    core::PWSTR,
-    Win32::{
-        Foundation::HINSTANCE,
-        System::{
-            LibraryLoader::GetModuleFileNameW,
-            ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
-            Threading::GetCurrentProcess,
-        },
+use windows::Win32::{
+    Foundation::HINSTANCE,
+    System::{
+        LibraryLoader::GetModuleFileNameW,
+        ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
+        Threading::GetCurrentProcess,
     },
 };
 
@@ -56,9 +53,7 @@ impl Module {
             handle,
             path: {
                 let mut buf = [0u16; 1024];
-                let size = unsafe {
-                    GetModuleFileNameW(handle, PWSTR(buf.as_mut_ptr()), buf.len() as u32)
-                } as usize;
+                let size = unsafe { GetModuleFileNameW(handle, &mut buf) } as usize;
                 let os = OsString::from_wide(&buf[0..size]);
                 os.into_string().ok()
             },
