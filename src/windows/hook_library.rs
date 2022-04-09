@@ -148,3 +148,26 @@ impl Drop for HookLibrary {
         }
     }
 }
+
+pub struct HookLibraries(Vec<HookLibrary>);
+impl HookLibraries {
+    pub fn new(libraries: Vec<HookLibrary>) -> HookLibraries {
+        HookLibraries(libraries)
+    }
+
+    pub fn init(&self, module: &mut Module) -> anyhow::Result<()> {
+        for library in &self.0 {
+            library.init(module)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> anyhow::Result<()> {
+        for library in &self.0 {
+            library.set_enabled(patcher, enabled)?;
+        }
+
+        Ok(())
+    }
+}
