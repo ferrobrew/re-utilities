@@ -56,3 +56,28 @@ pub fn launch_steam_process_and_inject(
         inject_into_running_process,
     )
 }
+
+pub fn launch_env_path_process_and_inject(
+    executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
+    payload_name: &str,
+    inject_into_running_process: bool,
+) -> anyhow::Result<OwnedProcess> {
+    let game_path: PathBuf = dunce::canonicalize(Path::new(
+        &std::env::args()
+            .nth(1)
+            .context("failed to get path from args")?,
+    ))?;
+    let executable_path = executable_path_builder(&game_path);
+    let process_name = executable_path
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .context("failed to get filename")?
+        .to_string();
+
+    launch_and_inject(
+        &process_name,
+        || spawn::arbitrary_process(&game_path, &executable_path, std::iter::empty()),
+        payload_name,
+        inject_into_running_process,
+    )
+}
