@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use crate::util;
 
 struct Patch {
-    address: *mut u8,
     original_bytes: Box<[u8]>,
 }
 
@@ -12,12 +13,14 @@ impl Patch {
 }
 
 pub struct Patcher {
-    patches: Vec<Patch>,
+    patches: HashMap<usize, Patch>,
 }
 
 impl Patcher {
     pub fn new() -> Patcher {
-        Patcher { patches: vec![] }
+        Patcher {
+            patches: HashMap::new(),
+        }
     }
 
     pub unsafe fn safe_write(&self, ptr: *mut u8, bytes: &[u8]) {
@@ -35,12 +38,20 @@ impl Patcher {
 
     pub unsafe fn patch(&mut self, address: usize, bytes: &[u8]) {
         let addr_ptr = util::make_ptr::<u8>(address);
-        self.patches.push(Patch {
-            address: addr_ptr,
-            original_bytes: std::slice::from_raw_parts(addr_ptr, bytes.len()).into(),
-        });
+        self.patches.insert(
+            address,
+            Patch {
+                original_bytes: std::slice::from_raw_parts(addr_ptr, bytes.len()).into(),
+            },
+        );
 
         self.safe_write(addr_ptr, bytes)
+    }
+
+    pub unsafe fn unpatch(&mut self, address: usize) -> Option<()> {
+        let original_bytes = self.patches.get(&address)?.original_bytes().to_owned();
+        self.safe_write(util::make_ptr(address), &original_bytes);
+        self.patches.remove(&address).map(|_| ())
     }
 
     #[cfg(target_pointer_width = "32")]
@@ -67,9 +78,9 @@ impl Patcher {
 
 impl Drop for Patcher {
     fn drop(&mut self) {
-        for patch in self.patches.iter().rev() {
+        for (address, patch) in self.patches.iter() {
             unsafe {
-                self.safe_write(patch.address, patch.original_bytes());
+                self.safe_write(util::make_ptr(*address), patch.original_bytes());
             }
         }
     }

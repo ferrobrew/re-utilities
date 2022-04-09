@@ -1,11 +1,15 @@
 use super::{
     detour_binder::{DetourBinder, NonstaticDetourBinder, StaticDetourBinder},
     module::Module,
+    patcher::Patcher,
 };
+
+use anyhow::Context;
 
 pub struct HookLibrary {
     binders: Vec<&'static StaticDetourBinder>,
     owned_binders: Vec<NonstaticDetourBinder>,
+    patches: Vec<(usize, Vec<u8>)>,
 
     inits: Vec<Box<dyn Fn(&mut Module) -> anyhow::Result<()>>>,
     shutdowns: Vec<Box<dyn Fn() -> anyhow::Result<()>>>,
@@ -19,6 +23,7 @@ impl HookLibrary {
         HookLibrary {
             binders: vec![],
             owned_binders: vec![],
+            patches: vec![],
 
             inits: vec![],
             shutdowns: vec![],
@@ -53,6 +58,11 @@ impl HookLibrary {
         self
     }
 
+    pub fn with_patch(mut self, address: usize, bytes: &[u8]) -> Self {
+        self.patches.push((address, bytes.to_owned()));
+        self
+    }
+
     pub fn on_init(
         mut self,
         init_fn: impl Fn(&mut Module) -> anyhow::Result<()> + 'static,
@@ -77,7 +87,7 @@ impl HookLibrary {
     }
 
     // operation functions
-    pub fn init(&mut self, module: &mut Module) -> anyhow::Result<()> {
+    pub fn init(&self, module: &mut Module) -> anyhow::Result<()> {
         for binder in self.binders() {
             binder.bind(module)?;
         }
@@ -88,7 +98,7 @@ impl HookLibrary {
         Ok(())
     }
 
-    pub fn set_enabled(&mut self, enabled: bool) -> anyhow::Result<()> {
+    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> anyhow::Result<()> {
         if enabled {
             for binder in self.binders() {
                 binder.enable()?;
@@ -96,12 +106,22 @@ impl HookLibrary {
             for enabler in &self.enablers {
                 (*enabler)()?;
             }
+            for (address, patch) in &self.patches {
+                unsafe {
+                    patcher.patch(*address, &patch);
+                }
+            }
         } else {
             for binder in self.binders() {
                 binder.disable()?;
             }
             for disabler in &self.disablers {
                 (*disabler)()?;
+            }
+            for (address, _) in &self.patches {
+                unsafe {
+                    patcher.unpatch(*address).context("failed to unpatch")?;
+                }
             }
         }
         Ok(())
