@@ -170,4 +170,14 @@ impl HookLibraries {
 
         Ok(())
     }
+
+    pub fn init_and_enable(
+        self,
+        module: &mut Module,
+        patcher: &mut Patcher,
+    ) -> anyhow::Result<Self> {
+        self.init(module)?;
+        self.set_enabled(patcher, true)?;
+        Ok(self)
+    }
 }
