@@ -16,6 +16,7 @@ pub struct Patcher {
     patches: HashMap<usize, Patch>,
 }
 
+#[allow(clippy::missing_safety_doc)]
 impl Patcher {
     pub fn new() -> Patcher {
         Patcher {
@@ -73,6 +74,12 @@ impl Patcher {
         // Finally, we patch the existing call and return the original destination.
         self.patch(src, &new_bytes);
         orig_call_dest as usize
+    }
+}
+
+impl Default for Patcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

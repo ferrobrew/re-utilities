@@ -108,7 +108,7 @@ impl HookLibrary {
             }
             for (address, patch) in &self.patches {
                 unsafe {
-                    patcher.patch(*address, &patch);
+                    patcher.patch(*address, patch);
                 }
             }
         } else {

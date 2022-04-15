@@ -1,7 +1,11 @@
+/// # Safety
+/// It makes a pointer out of the address you give it. Pretty unsafe.
 pub unsafe fn make_ptr<U>(ptr: usize) -> *mut U {
     make_ptr_with_offset(ptr, 0)
 }
 
+/// # Safety
+/// It makes a pointer out of the address you give it. Pretty unsafe.
 pub unsafe fn make_ptr_with_offset<U>(ptr: usize, offset: isize) -> *mut U {
     (ptr as *mut u8).offset(offset) as *mut U
 }
