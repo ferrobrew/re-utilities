@@ -4,7 +4,7 @@ name = "re-utilities"
 version = "0.1.0"
 
 [dependencies]
-anyhow = "1.0.56"
+anyhow = "1.0"
 dunce = "1.0.2"
 patternscan = "1.2.0"
 
@@ -19,13 +19,12 @@ debug-console = []
 type_language = ["glob", "itertools", "quote", "syn", "proc-macro2"]
 
 [target.'cfg(windows)'.dependencies]
-detour = "0.8.1"
-dll-syringe = "0.11.0"
+detour = {git = "https://github.com/lostinspiration/detour-rs.git"}
+dll-syringe = "0.13.1"
 game-scanner = "1.1.2"
 
 [target.'cfg(windows)'.dependencies.windows]
 features = [
-  "alloc",
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_Diagnostics_ToolHelp",
@@ -34,4 +33,4 @@ features = [
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
 ]
-version = "0.35.0"
+version = "0.39.0"

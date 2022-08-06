@@ -63,7 +63,7 @@ impl ThreadSuspender {
         #[cfg(feature = "debug-console")]
         println!("Suspended {} threads", threads.len());
         for handle in threads {
-            unsafe { SuspendThread(handle) };
+            unsafe { SuspendThread(*handle) };
         }
     }
 
@@ -71,7 +71,7 @@ impl ThreadSuspender {
         #[cfg(feature = "debug-console")]
         println!("Resumed {} threads", threads.len());
         for handle in threads {
-            unsafe { ResumeThread(handle) };
+            unsafe { ResumeThread(*handle) };
         }
     }
 
@@ -79,7 +79,7 @@ impl ThreadSuspender {
         #[cfg(feature = "debug-console")]
         println!("Closed {} threads", threads.len());
         for handle in threads {
-            unsafe { CloseHandle(handle) };
+            unsafe { CloseHandle(*handle) };
         }
     }
 

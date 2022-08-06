@@ -2,7 +2,7 @@ use anyhow::Context;
 use std::path::{Path, PathBuf};
 
 use dll_syringe::process::OwnedProcess;
-use windows::Win32::System::Threading;
+use windows::{core::HSTRING, Win32::System::Threading};
 
 pub fn arbitrary_process(
     game_path: &Path,
@@ -22,15 +22,17 @@ pub fn arbitrary_process(
         .collect();
 
     unsafe {
+        let application_name = HSTRING::from(executable_path.as_os_str());
+        let current_directory = HSTRING::from(game_path.as_os_str());
         Threading::CreateProcessW(
-            executable_path.as_os_str(),
-            Default::default(),
+            &application_name,
+            windows::core::PWSTR::null(),
             std::ptr::null(),
             std::ptr::null(),
             false,
             Threading::CREATE_UNICODE_ENVIRONMENT,
             environment.as_ptr() as _,
-            game_path.as_os_str(),
+            &current_directory,
             &startup_info,
             &mut process_info,
         )
