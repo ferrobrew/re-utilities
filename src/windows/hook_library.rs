@@ -37,9 +37,9 @@ impl HookLibrary {
         self
     }
 
-    pub fn with_detour<F: detour::Function>(
+    pub fn with_detour<F: retour::Function>(
         mut self,
-        detour: &'static detour::StaticDetour<F>,
+        detour: &'static retour::StaticDetour<F>,
     ) -> Self {
         self.owned_binders.push(NonstaticDetourBinder {
             enable: Box::new(|| {
