@@ -1,14 +1,15 @@
 use super::{
-    detour_binder::{DetourBinder, NonstaticDetourBinder, StaticDetourBinder},
+    detour_binder::{CompiletimeDetourBinder, DetourBinder, RuntimeDetourBinder},
     module::Module,
     patcher::Patcher,
 };
 
 use anyhow::Context;
 
+#[allow(clippy::type_complexity)]
 pub struct HookLibrary {
-    binders: Vec<&'static StaticDetourBinder>,
-    owned_binders: Vec<NonstaticDetourBinder>,
+    compiletime_binders: Vec<&'static CompiletimeDetourBinder>,
+    runtime_binders: Vec<RuntimeDetourBinder>,
     patches: Vec<(usize, Vec<u8>)>,
 
     inits: Vec<Box<dyn Fn(&mut Module) -> anyhow::Result<()>>>,
@@ -21,8 +22,8 @@ impl HookLibrary {
     // builder functions
     pub fn new() -> HookLibrary {
         HookLibrary {
-            binders: vec![],
-            owned_binders: vec![],
+            compiletime_binders: vec![],
+            runtime_binders: vec![],
             patches: vec![],
 
             inits: vec![],
@@ -32,16 +33,16 @@ impl HookLibrary {
         }
     }
 
-    pub fn with_binder(mut self, binder: &'static StaticDetourBinder) -> Self {
-        self.binders.push(binder);
+    pub fn with_binder(mut self, binder: &'static CompiletimeDetourBinder) -> Self {
+        self.compiletime_binders.push(binder);
         self
     }
 
     pub fn with_detour<F: retour::Function>(
         mut self,
-        detour: &'static retour::StaticDetour<F>,
+        detour: &'static retour::GenericDetour<F>,
     ) -> Self {
-        self.owned_binders.push(NonstaticDetourBinder {
+        self.runtime_binders.push(RuntimeDetourBinder {
             enable: Box::new(|| {
                 unsafe {
                     detour.enable()?;
@@ -54,6 +55,18 @@ impl HookLibrary {
                 }
                 Ok(())
             }),
+        });
+        self
+    }
+
+    pub fn with_callbacks(
+        mut self,
+        enable: impl Fn() -> anyhow::Result<()> + Send + Sync + 'static,
+        disable: impl Fn() -> anyhow::Result<()> + Send + Sync + 'static,
+    ) -> Self {
+        self.runtime_binders.push(RuntimeDetourBinder {
+            enable: Box::new(enable),
+            disable: Box::new(disable),
         });
         self
     }
@@ -128,10 +141,10 @@ impl HookLibrary {
     }
 
     fn binders(&self) -> impl Iterator<Item = &dyn DetourBinder> {
-        self.binders
+        self.compiletime_binders
             .iter()
             .map(|b| *b as &dyn DetourBinder)
-            .chain(self.owned_binders.iter().map(|b| b as &dyn DetourBinder))
+            .chain(self.runtime_binders.iter().map(|b| b as &dyn DetourBinder))
     }
 }
 

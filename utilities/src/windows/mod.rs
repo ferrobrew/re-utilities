@@ -2,7 +2,6 @@
 
 pub mod detour_binder;
 pub mod hook_library;
-pub mod launcher;
 pub mod module;
 
 mod patcher;

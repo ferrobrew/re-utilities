@@ -18,7 +18,7 @@ pub fn launch_and_inject(
         .join(payload_name);
 
     let found_process = inject_into_running_process
-        .then(|| process_name)
+        .then_some(process_name)
         .and_then(OwnedProcess::find_first_by_name);
     let process = match found_process {
         Some(process) => process,

@@ -1,10 +1,11 @@
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
+
 use proc_macro2::Span;
 use quote::quote;
 use regex::Regex;
 use syn::{
-    self, parse_macro_input, AttributeArgs, BareFnArg, Error, FnArg, Ident, ItemFn, Lit, LitStr,
-    Meta, NestedMeta, Result, TypeBareFn,
+    parse_macro_input, AttributeArgs, BareFnArg, Error, FnArg, Ident, ItemFn, Lit, LitStr, Meta,
+    NestedMeta, Result, TypeBareFn,
 };
 
 enum Address {
@@ -13,33 +14,22 @@ enum Address {
 }
 
 struct Args {
-    pub name: syn::LitStr,
     pub address: Address,
 }
 
-lazy_static! {
-    static ref PATTERN_REGEX: Regex =
-        Regex::new(r"^(([0-9A-Z]{2}|\?)\s)*([0-9A-Z]{2}|\?)$").unwrap();
+fn pattern_regex() -> &'static Regex {
+    static PATTERN_REGEX: OnceLock<Regex> = OnceLock::new();
+    PATTERN_REGEX.get_or_init(|| Regex::new(r"^(([0-9A-Z]{2}|\?)\s)*([0-9A-Z]{2}|\?)$").unwrap())
 }
 
 impl Args {
     fn new(args: AttributeArgs) -> Result<Self> {
-        let mut name = None;
         let mut address = None;
 
         for arg in args {
             match arg {
                 NestedMeta::Meta(Meta::NameValue(nv)) => {
-                    if nv.path.is_ident("name") {
-                        if let Lit::Str(lit) = nv.lit {
-                            name = Some(lit.clone());
-                        } else {
-                            return Err(Error::new_spanned(
-                                nv.lit,
-                                "`name` must be literal string",
-                            ));
-                        }
-                    } else if nv.path.is_ident("pattern") {
+                    if nv.path.is_ident("pattern") {
                         if address.is_some() {
                             return Err(Error::new_spanned(
                                 nv.path,
@@ -48,7 +38,7 @@ impl Args {
                         }
 
                         if let Lit::Str(lit) = nv.lit {
-                            if PATTERN_REGEX.is_match(&lit.value()) {
+                            if pattern_regex().is_match(&lit.value()) {
                                 address = Some(Address::Signature(lit.value().to_owned()));
                             } else {
                                 return Err(Error::new_spanned(
@@ -99,7 +89,6 @@ impl Args {
         }
 
         Ok(Self {
-            name: name.expect("missing `name` attribute"),
             address: address.expect("missing `address` attribute"),
         })
     }
@@ -118,10 +107,6 @@ pub fn detour(
 
     // Extract input
     let detour = parse_macro_input!(input as ItemFn);
-    let error_string = LitStr::new(
-        &format!("failed to find {}", args.name.value()),
-        Span::call_site(),
-    );
     let visibility = detour.vis.clone();
     let signature = detour.sig.clone();
     let function_name = Ident::new(&signature.ident.to_string(), Span::call_site());
@@ -154,47 +139,47 @@ pub fn detour(
         output: signature.output.clone(),
     };
 
-    // Remove the ABI from the detour-handler, detour-rs handles that for us
-    let detour = ItemFn {
-        sig: syn::Signature {
-            abi: None,
-            ..signature
-        },
-        ..detour
-    };
-
     let address_block = match args.address {
-        Address::Signature(signature) => quote! {
-            use anyhow::Context;
-            let address = module.scan(#signature).context(#error_string)?;
-        },
+        Address::Signature(addr_sig) => {
+            let error_string = LitStr::new(
+                &format!("failed to find {}", signature.ident),
+                Span::call_site(),
+            );
+            quote! {
+                use anyhow::Context;
+                let address = module.scan(#addr_sig).context(#error_string)?;
+            }
+        }
         Address::Address(address) => quote! {
             let address = #address;
         },
     };
 
     quote! {
-        static_detour! {
-            #visibility static #detour_name: #detour_type;
-        }
+        #visibility static #detour_name: std::sync::OnceLock<::re_utilities::retour::GenericDetour<#detour_type>> = std::sync::OnceLock::new();
 
-        #visibility static #binder_name: ::re_utilities::detour_binder::StaticDetourBinder = ::re_utilities::detour_binder::StaticDetourBinder {
+        #visibility static #binder_name: ::re_utilities::detour_binder::CompiletimeDetourBinder = ::re_utilities::detour_binder::CompiletimeDetourBinder {
             bind: &|module| {
                 unsafe {
                     #address_block
-                    #detour_name.initialize(::std::mem::transmute(address), #function_name)?;
+                    #detour_name.set(
+                        ::re_utilities::retour::GenericDetour::<#detour_type>::new(
+                            ::std::mem::transmute(address),
+                            #function_name
+                        )?
+                    ).expect("detour already bound");
                 }
                 Ok(())
             },
             enable: &|| {
                 unsafe {
-                    #detour_name.enable()?;
+                    #detour_name.get().expect("detour not bound").enable()?;
                 }
                 Ok(())
             },
             disable: &|| {
                 unsafe {
-                    #detour_name.disable()?;
+                    #detour_name.get().expect("detour not bound").disable()?;
                 }
                 Ok(())
             },

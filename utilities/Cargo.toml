@@ -1,0 +1,28 @@
+[package]
+edition = "2021"
+name = "re-utilities"
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+
+patternscan = "1.2.0"
+
+[features]
+debug-console = []
+
+[target.'cfg(windows)'.dependencies]
+retour = { version = "=0.4.0-alpha.2" }
+
+[target.'cfg(windows)'.dependencies.windows]
+features = [
+  "alloc",
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
+]
+workspace = true

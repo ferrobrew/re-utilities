@@ -8,7 +8,7 @@ struct Patch {
 
 impl Patch {
     fn original_bytes(&self) -> &[u8] {
-        &*self.original_bytes
+        &self.original_bytes
     }
 }
 

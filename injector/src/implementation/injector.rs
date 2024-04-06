@@ -48,7 +48,7 @@ pub fn inject(process: BorrowedProcess, payload_path: &Path) -> anyhow::Result<(
     }
 
     // inject
-    std::fs::copy(&payload_path, &injected_payload_path)?;
+    std::fs::copy(payload_path, &injected_payload_path)?;
     let process_module = syringe.inject(&injected_payload_path)?;
     call_procedure(&syringe, process_module, "load")?;
 

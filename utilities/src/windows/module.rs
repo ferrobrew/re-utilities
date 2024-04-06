@@ -1,7 +1,4 @@
-use std::{
-    collections, convert::TryInto, ffi::OsString, io, mem, os::windows::ffi::OsStringExt,
-    path::Path, slice,
-};
+use std::{collections, ffi::OsString, io, mem, os::windows::ffi::OsStringExt, path::Path, slice};
 
 use windows::Win32::{
     Foundation::HINSTANCE,

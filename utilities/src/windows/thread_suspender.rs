@@ -33,7 +33,7 @@ impl ThreadSuspender {
         ) -> Vec<Value> {
             unsafe {
                 let mut value = Default::default();
-                let size: *mut u32 = mem::transmute(&mut value);
+                let size = &mut value as *mut Value as *mut u32;
                 *size = mem::size_of::<Value>() as u32;
                 let mut values = Vec::with_capacity(64);
                 if first(handle, &mut value).as_bool() {
