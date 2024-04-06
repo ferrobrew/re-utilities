@@ -16,7 +16,6 @@ retour = { version = "=0.4.0-alpha.2" }
 
 [target.'cfg(windows)'.dependencies.windows]
 features = [
-  "alloc",
   "Win32_Foundation",
   "Win32_Security",
   "Win32_System_Diagnostics_ToolHelp",
