@@ -1,16 +1,14 @@
 use anyhow::Context;
 use std::path::{Path, PathBuf};
 
-use dll_syringe::process::OwnedProcess;
 use windows::{core::HSTRING, Win32::System::Threading};
 
 pub fn arbitrary_process(
     game_path: &Path,
     executable_path: &Path,
     env_vars: impl Iterator<Item = (String, String)>,
-) -> anyhow::Result<OwnedProcess> {
-    use std::os::windows::prelude::FromRawHandle;
-
+    create_suspended: bool,
+) -> anyhow::Result<Threading::PROCESS_INFORMATION> {
     let startup_info = Threading::STARTUPINFOW::default();
     let mut process_info = Threading::PROCESS_INFORMATION::default();
 
@@ -21,6 +19,11 @@ pub fn arbitrary_process(
         .chain(std::iter::once(0))
         .collect();
 
+    let mut creation_flags = Threading::CREATE_UNICODE_ENVIRONMENT;
+    if create_suspended {
+        creation_flags |= Threading::CREATE_SUSPENDED;
+    }
+
     unsafe {
         let application_name = HSTRING::from(executable_path.as_os_str());
         let current_directory = HSTRING::from(game_path.as_os_str());
@@ -30,14 +33,14 @@ pub fn arbitrary_process(
             std::ptr::null(),
             std::ptr::null(),
             false,
-            Threading::CREATE_UNICODE_ENVIRONMENT,
+            creation_flags,
             environment.as_ptr() as _,
             &current_directory,
             &startup_info,
             &mut process_info,
         )
         .as_bool()
-        .then(|| OwnedProcess::from_raw_handle(process_info.hProcess.0 as _))
+        .then(|| process_info)
         .context("failed to spawn process")
     }
 }
@@ -45,7 +48,8 @@ pub fn arbitrary_process(
 pub fn steam_process(
     app_id: u32,
     executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
-) -> anyhow::Result<OwnedProcess> {
+    create_suspended: bool,
+) -> anyhow::Result<Threading::PROCESS_INFORMATION> {
     let steam_dir = steamlocate::SteamDir::locate()?;
 
     let (app, library) = steam_dir
@@ -58,5 +62,5 @@ pub fn steam_process(
         .iter()
         .map(|s| (s.to_string(), app_id.to_string()));
 
-    arbitrary_process(&game_path, &executable_path, env_vars)
+    arbitrary_process(&game_path, &executable_path, env_vars, create_suspended)
 }
