@@ -475,6 +475,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyxis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "glob",
+ "itertools 0.10.3",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.91",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -502,18 +514,6 @@ dependencies = [
  "dunce",
  "steamlocate",
  "windows",
-]
-
-[[package]]
-name = "re-utilities-type-language"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "glob",
- "itertools 0.10.3",
- "proc-macro2",
- "quote",
- "syn 1.0.91",
 ]
 
 [[package]]
