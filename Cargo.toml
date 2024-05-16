@@ -1,5 +1,5 @@
 [workspace]
-members = ["detours-macro", "injector", "pyxis", "utilities"]
+members = ["detours-macro", "injector", "utilities"]
 resolver = "2"
 
 [workspace.dependencies]
