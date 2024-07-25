@@ -1,5 +1,3 @@
-#![cfg(target_os = "windows")]
-
 pub mod detour_binder;
 pub mod hook_library;
 pub mod module;

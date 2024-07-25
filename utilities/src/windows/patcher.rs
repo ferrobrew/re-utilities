@@ -32,9 +32,9 @@ impl Patcher {
         let mut old: PAGE_PROTECTION_FLAGS = Default::default();
         let len = bytes.len();
 
-        VirtualProtect(ptr as _, len, PAGE_EXECUTE_READWRITE, &mut old);
+        let _ = VirtualProtect(ptr as _, len, PAGE_EXECUTE_READWRITE, &mut old);
         std::slice::from_raw_parts_mut(ptr, len).copy_from_slice(bytes);
-        VirtualProtect(ptr as _, len, old, &mut old);
+        let _ = VirtualProtect(ptr as _, len, old, &mut old);
     }
 
     pub unsafe fn patch(&mut self, address: usize, bytes: &[u8]) {

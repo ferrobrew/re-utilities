@@ -2,7 +2,7 @@ use std::mem;
 
 use anyhow::Context;
 use windows::Win32::{
-    Foundation::{CloseHandle, BOOL, HANDLE},
+    Foundation::{CloseHandle, HANDLE},
     System::{
         Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD,
@@ -28,17 +28,17 @@ impl ThreadSuspender {
 
         fn from_snapshot<Value: Default + Copy + Sized>(
             handle: HANDLE,
-            first: unsafe fn(HANDLE, *mut Value) -> BOOL,
-            next: unsafe fn(HANDLE, *mut Value) -> BOOL,
+            first: unsafe fn(HANDLE, *mut Value) -> windows::core::Result<()>,
+            next: unsafe fn(HANDLE, *mut Value) -> windows::core::Result<()>,
         ) -> Vec<Value> {
             unsafe {
                 let mut value = Default::default();
                 let size = &mut value as *mut Value as *mut u32;
                 *size = mem::size_of::<Value>() as u32;
                 let mut values = Vec::with_capacity(64);
-                if first(handle, &mut value).as_bool() {
+                if first(handle, &mut value).is_ok() {
                     values.push(value);
-                    while next(handle, &mut value).as_bool() {
+                    while next(handle, &mut value).is_ok() {
                         values.push(value);
                     }
                 }
@@ -79,7 +79,9 @@ impl ThreadSuspender {
         #[cfg(feature = "debug-console")]
         println!("Closed {} threads", threads.len());
         for handle in threads {
-            unsafe { CloseHandle(*handle) };
+            unsafe {
+                let _ = CloseHandle(*handle);
+            };
         }
     }
 

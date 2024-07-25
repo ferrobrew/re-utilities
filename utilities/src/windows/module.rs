@@ -1,7 +1,7 @@
 use std::{collections, ffi::OsString, io, mem, os::windows::ffi::OsStringExt, path::Path, slice};
 
 use windows::Win32::{
-    Foundation::HINSTANCE,
+    Foundation::HMODULE,
     System::{
         LibraryLoader::GetModuleFileNameW,
         ProcessStatus::{K32EnumProcessModules, K32GetModuleInformation, MODULEINFO},
@@ -26,7 +26,7 @@ struct SerializedCache {
 
 #[derive(Debug, Clone)]
 pub struct Module {
-    handle: HINSTANCE,
+    handle: HMODULE,
     path: Option<String>,
     pub base: *mut u8,
     _entry_point: *mut u8,
@@ -36,10 +36,10 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn from_handle(handle: HINSTANCE) -> Module {
+    pub fn from_handle(handle: HMODULE) -> Module {
         let mut mod_info = unsafe { std::mem::zeroed() };
         unsafe {
-            K32GetModuleInformation(
+            let _ = K32GetModuleInformation(
                 GetCurrentProcess(),
                 handle,
                 &mut mod_info,
@@ -64,18 +64,18 @@ impl Module {
 
     pub fn get_all() -> impl Iterator<Item = Module> {
         let process = unsafe { GetCurrentProcess() };
-        let hinstance_size = mem::size_of::<HINSTANCE>() as u32;
-        let mut temp = HINSTANCE::default();
+        let mut hmodule = HMODULE::default();
+        let hmodule_size = mem::size_of::<HMODULE>() as u32;
         let mut needed = 0u32;
         unsafe {
-            K32EnumProcessModules(process, &mut temp, hinstance_size, &mut needed);
+            let _ = K32EnumProcessModules(process, &mut hmodule, hmodule_size, &mut needed);
         }
-        let mut buf = vec![HINSTANCE::default(); (needed / hinstance_size) as usize];
+        let mut buf = vec![HMODULE::default(); (needed / hmodule_size) as usize];
         unsafe {
-            K32EnumProcessModules(
+            let _ = K32EnumProcessModules(
                 process,
                 buf.as_mut_ptr(),
-                hinstance_size * (buf.len() as u32),
+                hmodule_size * (buf.len() as u32),
                 &mut needed,
             );
         }
@@ -225,7 +225,7 @@ impl Module {
     }
 
     #[allow(dead_code)]
-    pub fn handle(&self) -> HINSTANCE {
+    pub fn handle(&self) -> HMODULE {
         self.handle
     }
 

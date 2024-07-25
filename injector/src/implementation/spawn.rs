@@ -50,17 +50,16 @@ pub fn arbitrary_process<'a>(
         Threading::CreateProcessW(
             &application_name,
             PWSTR::from_raw(commandline.as_mut_ptr()),
-            std::ptr::null(),
-            std::ptr::null(),
+            None,
+            None,
             false,
             creation_flags,
-            environment.as_ptr() as _,
+            Some(environment.as_ptr() as _),
             &current_directory,
             &startup_info,
             &mut process_info,
         )
-        .as_bool()
-        .then(|| process_info)
+        .map(|_| process_info)
         .context("failed to spawn process")
     }
 }
