@@ -44,7 +44,8 @@ impl Module {
                 handle,
                 &mut mod_info,
                 mem::size_of::<MODULEINFO>() as u32,
-            );
+            )
+            .unwrap();
         }
         Module {
             handle,
@@ -68,7 +69,7 @@ impl Module {
         let hmodule_size = mem::size_of::<HMODULE>() as u32;
         let mut needed = 0u32;
         unsafe {
-            let _ = K32EnumProcessModules(process, &mut hmodule, hmodule_size, &mut needed);
+            K32EnumProcessModules(process, &mut hmodule, hmodule_size, &mut needed).unwrap();
         }
         let mut buf = vec![HMODULE::default(); (needed / hmodule_size) as usize];
         unsafe {
@@ -77,7 +78,8 @@ impl Module {
                 buf.as_mut_ptr(),
                 hmodule_size * (buf.len() as u32),
                 &mut needed,
-            );
+            )
+            .unwrap();
         }
         buf.into_iter().map(Module::from_handle)
     }

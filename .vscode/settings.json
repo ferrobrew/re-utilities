@@ -1,5 +1,4 @@
 {
-    "rust-analyzer.cargo.features": [
-        "nightly"
-    ]
+    // This is not ideal, but it means I can develop on Linux, so...
+    "rust-analyzer.cargo.target": "x86_64-pc-windows-msvc"
 }

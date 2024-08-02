@@ -7,14 +7,11 @@ version = "0.1.0"
 anyhow = { workspace = true }
 
 patternscan = "1.2.0"
+retour = { git = "https://github.com/Hpmason/retour-rs.git", features = [
+  "thiscall-abi",
+] }
 
-[features]
-debug-console = []
-
-[target.'cfg(windows)'.dependencies]
-retour = { git = "https://github.com/Hpmason/retour-rs.git", features = ["thiscall-abi"] }
-
-[target.'cfg(windows)'.dependencies.windows]
+[dependencies.windows]
 features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -25,3 +22,6 @@ features = [
   "Win32_System_Threading",
 ]
 workspace = true
+
+[features]
+debug-console = []

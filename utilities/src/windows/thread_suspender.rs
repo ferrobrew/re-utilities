@@ -79,9 +79,7 @@ impl ThreadSuspender {
         #[cfg(feature = "debug-console")]
         println!("Closed {} threads", threads.len());
         for handle in threads {
-            unsafe {
-                let _ = CloseHandle(*handle);
-            };
+            unsafe { CloseHandle(*handle).unwrap() };
         }
     }
 
