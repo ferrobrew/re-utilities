@@ -2,17 +2,36 @@ use anyhow::Context;
 use std::path::{Path, PathBuf};
 
 use windows::{
-    core::{HSTRING, PWSTR},
-    Win32::System::Threading,
+    core::{Owned, HSTRING, PWSTR},
+    Win32::{Foundation::HANDLE, System::Threading},
 };
 
+/// An owned variant of `Threading::PROCESS_INFORMATION`.
+pub struct ProcessInformation {
+    pub process: Owned<HANDLE>,
+    pub thread: Owned<HANDLE>,
+    pub process_id: u32,
+    pub thread_id: u32,
+}
+impl From<Threading::PROCESS_INFORMATION> for ProcessInformation {
+    fn from(info: Threading::PROCESS_INFORMATION) -> Self {
+        Self {
+            process: unsafe { Owned::new(info.hProcess) },
+            thread: unsafe { Owned::new(info.hThread) },
+            process_id: info.dwProcessId,
+            thread_id: info.dwThreadId,
+        }
+    }
+}
+
+/// Spawns a process with the given executable and arguments.
 pub fn arbitrary_process<'a>(
     game_path: &Path,
     executable_path: &Path,
     env_vars: impl IntoIterator<Item = (String, String)>,
     args: impl IntoIterator<Item = &'a str>,
     create_suspended: bool,
-) -> anyhow::Result<Threading::PROCESS_INFORMATION> {
+) -> anyhow::Result<ProcessInformation> {
     let startup_info = Threading::STARTUPINFOW::default();
     let mut process_info = Threading::PROCESS_INFORMATION::default();
 
@@ -59,17 +78,18 @@ pub fn arbitrary_process<'a>(
             &startup_info,
             &mut process_info,
         )
-        .map(|_| process_info)
+        .map(|_| process_info.into())
         .context("failed to spawn process")
     }
 }
 
+/// Spawns a process for the given Steam app ID.
 pub fn steam_process<'a>(
     app_id: u32,
     executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
     args: impl IntoIterator<Item = &'a str>,
     create_suspended: bool,
-) -> anyhow::Result<Threading::PROCESS_INFORMATION> {
+) -> anyhow::Result<ProcessInformation> {
     let steam_dir = steamlocate::SteamDir::locate()?;
 
     let (app, library) = steam_dir
