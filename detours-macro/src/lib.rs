@@ -157,22 +157,18 @@ pub fn detour(
 
     quote! {
         #visibility static #detour_name: std::sync::OnceLock<::re_utilities::retour::GenericDetour<#detour_type>> = std::sync::OnceLock::new();
-
         #visibility static #binder_name: ::re_utilities::detour_binder::CompiletimeDetourBinder = ::re_utilities::detour_binder::CompiletimeDetourBinder {
-            bind: &|module| {
-                unsafe {
-                    #address_block
-                    #detour_name.set(
-                        ::re_utilities::retour::GenericDetour::<#detour_type>::new(
-                            ::std::mem::transmute(address),
-                            #function_name
-                        )?
-                    ).expect("detour already bound");
-                }
-                Ok(())
-            },
             enable: &|| {
                 unsafe {
+                    if #detour_name.get().is_none() {
+                        #address_block
+                        #detour_name.set(
+                            ::re_utilities::retour::GenericDetour::<#detour_type>::new(
+                                ::std::mem::transmute(address),
+                                #function_name
+                            )?
+                        ).expect("detour already bound");
+                    }
                     #detour_name.get().expect("detour not bound").enable()?;
                 }
                 Ok(())
