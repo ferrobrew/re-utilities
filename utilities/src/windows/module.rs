@@ -39,7 +39,7 @@ impl Module {
     pub fn from_handle(handle: HMODULE) -> Module {
         let mut mod_info = unsafe { std::mem::zeroed() };
         unsafe {
-            let _ = K32GetModuleInformation(
+            K32GetModuleInformation(
                 GetCurrentProcess(),
                 handle,
                 &mut mod_info,
@@ -73,7 +73,7 @@ impl Module {
         }
         let mut buf = vec![HMODULE::default(); (needed / hmodule_size) as usize];
         unsafe {
-            let _ = K32EnumProcessModules(
+            K32EnumProcessModules(
                 process,
                 buf.as_mut_ptr(),
                 hmodule_size * (buf.len() as u32),

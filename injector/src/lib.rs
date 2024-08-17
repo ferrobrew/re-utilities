@@ -102,6 +102,7 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<()> {
         };
 
         // Create a remote thread to load the DLL
+        #[allow(clippy::missing_transmute_annotations)]
         let thread_handle = Owned::new(
             CreateRemoteThread(
                 process,
@@ -130,8 +131,10 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<()> {
 pub fn get_processes_by_name(name: &str) -> windows::core::Result<Vec<(u32, Owned<HANDLE>)>> {
     unsafe {
         let snapshot = Owned::new(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?);
-        let mut entry = PROCESSENTRY32W::default();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
 
         let mut handles = Vec::new();
 

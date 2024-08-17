@@ -17,7 +17,6 @@ use windows::Win32::{
 pub struct ThreadSuspender {
     threads: Vec<HANDLE>,
 }
-
 impl ThreadSuspender {
     pub fn new() -> anyhow::Result<Self> {
         let process_id = unsafe { GetCurrentProcessId() };
@@ -58,7 +57,6 @@ impl ThreadSuspender {
         Self::suspend(&threads);
         Ok(Self { threads })
     }
-
     fn suspend(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Suspended {} threads", threads.len());
@@ -66,7 +64,6 @@ impl ThreadSuspender {
             unsafe { SuspendThread(*handle) };
         }
     }
-
     fn resume(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Resumed {} threads", threads.len());
@@ -74,7 +71,6 @@ impl ThreadSuspender {
             unsafe { ResumeThread(*handle) };
         }
     }
-
     fn close(threads: &[HANDLE]) {
         #[cfg(feature = "debug-console")]
         println!("Closed {} threads", threads.len());
@@ -82,13 +78,11 @@ impl ThreadSuspender {
             unsafe { CloseHandle(*handle).unwrap() };
         }
     }
-
     pub fn for_block<T>(mut f: impl FnMut() -> anyhow::Result<T>) -> anyhow::Result<T> {
         let _suspender = ThreadSuspender::new()?;
         f()
     }
 }
-
 impl Drop for ThreadSuspender {
     fn drop(&mut self) {
         Self::resume(&self.threads);
