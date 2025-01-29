@@ -55,15 +55,19 @@ impl Patcher {
         self.patches.remove(&address).map(|_| ())
     }
 
-    #[cfg(target_pointer_width = "32")]
+    /// Replace a 5-byte call (0xE8 CALL rel16/32) at `src` with a call to our destination `dst`.
+    ///
+    /// On 64-bit platforms, the destination must be within 32-bit range.
     pub unsafe fn replace_call_destination(&mut self, src: usize, dst: usize) -> usize {
-        // We are replacing an existing call with a call (assumed 5-bytes) to our own code.
         // First, we determine what the original destination of the call was.
         let orig_call_target: *mut isize = util::make_ptr_with_offset(src, 1);
         let orig_call_dest = *orig_call_target + (src as isize) + 5;
 
         // Next, we generate a new call to our destination.
         let new_call_target = dst - src - 5;
+        let new_call_target: i32 = new_call_target
+            .try_into()
+            .expect("call target out of range (must be within 32-bit range)");
         let new_bytes: [u8; 5] = {
             let mut bytes = [0; 5];
             bytes[0] = 0xE8;
