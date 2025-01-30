@@ -60,14 +60,14 @@ impl Patcher {
     /// On 64-bit platforms, the destination must be within 32-bit range.
     pub unsafe fn replace_call_destination(&mut self, src: usize, dst: usize) -> usize {
         // First, we determine what the original destination of the call was.
-        let orig_call_target: *mut isize = util::make_ptr_with_offset(src, 1);
-        let orig_call_dest = *orig_call_target + (src as isize) + 5;
+        let orig_call_target: *mut i32 = util::make_ptr_with_offset(src, 1);
+        let orig_call_dest = (*orig_call_target as isize) + (src as isize) + 5;
 
         // Next, we generate a new call to our destination.
         let new_call_target = dst - src - 5;
-        let new_call_target: i32 = new_call_target
-            .try_into()
-            .expect("call target out of range (must be within 32-bit range)");
+        let new_call_target: i32 = new_call_target.try_into().expect(&format!(
+            "call target out of range {src:x?} {dst:x?} {orig_call_dest:x?} {new_call_target:x?} (must be within 32-bit range)"
+        ));
         let new_bytes: [u8; 5] = {
             let mut bytes = [0; 5];
             bytes[0] = 0xE8;
