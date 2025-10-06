@@ -7,9 +7,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 
 patternscan = "1.2.0"
-retour = { git = "https://github.com/Hpmason/retour-rs.git", features = [
-  "thiscall-abi",
-] }
+retour = { git = "https://github.com/Hpmason/retour-rs.git" }
 
 [dependencies.windows]
 features = [
@@ -25,3 +23,4 @@ workspace = true
 
 [features]
 debug-console = []
+thiscall-abi = ["retour/thiscall-abi"]
