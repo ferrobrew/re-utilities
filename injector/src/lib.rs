@@ -34,7 +34,9 @@ pub mod spawn;
 ///
 /// Note that this will only work when injecting into a process of the same architecture as the
 /// injector. For example, a 64-bit injector can only inject into a 64-bit process.
-pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<()> {
+///
+/// Returns the path to the injected DLL.
+pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
     let injected_payload_path = {
         let decompose_filename = |filename: &Path| {
             Some((
@@ -117,14 +119,17 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<()> {
         );
 
         // Wait for thread to finish
-        WaitForSingleObject(*thread_handle, 5000);
+        let result = WaitForSingleObject(*thread_handle, 5000);
+        if result == WAIT_ABANDONED || result == WAIT_TIMEOUT || result.0 == INFINITE {
+            anyhow::bail!("failed to inject DLL: {result:?}");
+        }
 
         // Free memory
         VirtualFreeEx(process, alloc, 0, MEM_RELEASE).context("failed to free memory")?;
-        WaitForSingleObject(process, INFINITE);
     }
 
-    Ok(())
+    Ok(injected_payload_path)
+}
 }
 
 /// Gets a list of process handles by their name, if running.
