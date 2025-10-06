@@ -197,6 +197,7 @@ pub fn call_remote_export(
                 process,
                 None,
                 0,
+                #[allow(clippy::missing_transmute_annotations)]
                 Some(std::mem::transmute(remote_addr)),
                 None,
                 0,
@@ -257,7 +258,7 @@ pub fn get_remote_module_base(
             if PathBuf::from(&*OsString::from_wide(&entry.szExePath[..len])).canonicalize()?
                 == module_path
             {
-                return Ok(NonNull::new(entry.modBaseAddr as *mut u8));
+                return Ok(NonNull::new(entry.modBaseAddr));
             }
 
             if Module32NextW(*th, &mut entry).is_err() {
