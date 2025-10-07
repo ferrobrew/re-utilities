@@ -145,6 +145,7 @@ pub fn call_remote_export(
     process: HANDLE,
     remote_module_base: NonNull<u8>,
     export_name: &str,
+    timeout: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
     unsafe {
         // Get the module file name from the remote process
@@ -206,8 +207,11 @@ pub fn call_remote_export(
             .context("Failed to create remote call thread")?,
         );
 
-        // Wait for the thread to complete (10 second timeout)
-        let result = WaitForSingleObject(*thread_handle, 10000);
+        // Wait for the thread to complete
+        let result = WaitForSingleObject(
+            *thread_handle,
+            timeout.map(|t| t.as_millis() as u32).unwrap_or(INFINITE),
+        );
 
         match result {
             WAIT_OBJECT_0 => Ok(()),
