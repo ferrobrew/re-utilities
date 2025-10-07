@@ -65,7 +65,7 @@ impl Patcher {
 
         // Next, we generate a new call to our destination.
         let new_call_target = dst - src - 5;
-        let new_call_target: i32 = new_call_target.try_into().expect(&format!(
+        let new_call_target: i32 = new_call_target.try_into().unwrap_or_else(|_| panic!(
             "call target out of range {src:x?} {dst:x?} {orig_call_dest:x?} {new_call_target:x?} (must be within 32-bit range)"
         ));
         let new_bytes: [u8; 5] = {
