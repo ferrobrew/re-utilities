@@ -4,7 +4,7 @@ use proc_macro2::Span;
 use quote::quote;
 use regex::Regex;
 use syn::{
-    parse_macro_input, AttributeArgs, BareFnArg, Error, FnArg, Ident, ItemFn, Lit, LitStr, Meta,
+    parse_macro_input, AttributeArgs, BareFnArg, Error, FnArg, Ident, ItemFn, Lit, Meta,
     NestedMeta, Result, TypeBareFn,
 };
 
@@ -141,13 +141,22 @@ pub fn detour(
 
     let address_block = match args.address {
         Address::Signature(addr_sig) => {
-            let error_string = LitStr::new(
-                &format!("failed to find {}", signature.ident),
-                Span::call_site(),
-            );
+            let error_string = format!("failed to find {}", signature.ident);
             quote! {
-                use anyhow::Context;
-                let address = module.scan(#addr_sig).context(#error_string)?;
+                let address = module.scan(#addr_sig).map_err(|e| {
+                    match e {
+                        ::re_utilities::Error::PatternScanFailed { context } => {
+                            ::re_utilities::Error::PatternScanFailed {
+                                context: Some(format!(
+                                    "{}: {}",
+                                    #error_string,
+                                    context.unwrap_or_default()
+                                )),
+                            }
+                        }
+                        other => other,
+                    }
+                })?;
             }
         }
         Address::Address(address) => quote! {

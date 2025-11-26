@@ -5,7 +5,6 @@ use std::{
     ptr::NonNull,
 };
 
-use anyhow::Context;
 use windows::{
     core::{s, w, Owned, HSTRING, PCSTR},
     Win32::{
@@ -36,7 +35,10 @@ use windows::{
     },
 };
 
+pub mod error;
 pub mod spawn;
+
+pub use error::{Error, Result};
 
 /// Injects a DLL into a process. To get a process handle, use [`get_processes_by_name`] or
 /// functions from [`spawn`].
@@ -45,7 +47,7 @@ pub mod spawn;
 /// injector. For example, a 64-bit injector can only inject into a 64-bit process.
 ///
 /// Returns the path to the injected DLL.
-pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
+pub fn inject(process: HANDLE, payload_path: &Path) -> Result<PathBuf> {
     let injected_payload_path = {
         let decompose_filename = |filename: &Path| {
             Some((
@@ -55,7 +57,7 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
         };
 
         let (stem, extension) =
-            decompose_filename(payload_path).context("failed to decompose filename")?;
+            decompose_filename(payload_path).ok_or(Error::FilenameDecomposition)?;
 
         let injected_payload_filename = Path::new(&(stem + "_loaded")).with_extension(extension);
         payload_path.with_file_name(&injected_payload_filename)
@@ -84,10 +86,9 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
             PAGE_EXECUTE_READWRITE,
         );
         if alloc.is_null() {
-            anyhow::bail!(
-                "failed to allocate memory in remote process: {:?}",
-                windows::core::Error::from_thread()
-            );
+            return Err(Error::RemoteMemoryAllocation {
+                source: windows::core::Error::from_thread(),
+            });
         }
 
         // Write the DLL path to the target process
@@ -99,17 +100,20 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
             dll_path.len() * std::mem::size_of::<u16>(),
             Some(&mut bytes_written),
         )
-        .context("failed to write memory")?;
+        .map_err(|e| Error::WriteMemory { source: e })?;
 
         // Get the address of LoadLibraryW
         let kernel32_module =
-            GetModuleHandleW(w!("kernel32.dll")).context("failed to get module")?;
+            GetModuleHandleW(w!("kernel32.dll")).map_err(|e| Error::GetModuleHandle {
+                module: "kernel32.dll".to_string(),
+                source: e,
+            })?;
         let load_library = GetProcAddress(kernel32_module, s!("LoadLibraryW"));
         let Some(load_library) = load_library else {
-            anyhow::bail!(
-                "failed to get LoadLibraryW address: {:?}",
-                windows::core::Error::from_thread()
-            );
+            return Err(Error::GetProcAddress {
+                procedure: "LoadLibraryW".to_string(),
+                source: windows::core::Error::from_thread(),
+            });
         };
 
         // Create a remote thread to load the DLL
@@ -124,17 +128,21 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
                 0,
                 None,
             )
-            .context("failed to create remote thread")?,
+            .map_err(|e| Error::CreateRemoteThread {
+                context: "DLL injection".to_string(),
+                source: e,
+            })?,
         );
 
         // Wait for thread to finish
         let result = WaitForSingleObject(*thread_handle, 5000);
         if result == WAIT_ABANDONED || result == WAIT_TIMEOUT || result.0 == INFINITE {
-            anyhow::bail!("failed to inject DLL: {result:?}");
+            return Err(Error::InjectionWaitFailed { result: result.0 });
         }
 
         // Free memory
-        VirtualFreeEx(process, alloc, 0, MEM_RELEASE).context("failed to free memory")?;
+        VirtualFreeEx(process, alloc, 0, MEM_RELEASE)
+            .map_err(|e| Error::FreeMemory { source: e })?;
     }
 
     Ok(injected_payload_path)
@@ -146,7 +154,7 @@ pub fn call_remote_export(
     remote_module_base: NonNull<u8>,
     export_name: &str,
     timeout: Option<std::time::Duration>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     unsafe {
         // Get the module file name from the remote process
         let mut module_path = [0u16; MAX_PATH as usize];
@@ -156,10 +164,9 @@ pub fn call_remote_export(
             &mut module_path,
         );
         if result == 0 {
-            anyhow::bail!(
-                "Failed to get remote export call module path: {:?}",
-                windows::core::Error::from_thread()
-            );
+            return Err(Error::GetRemoteModuleFileName {
+                source: windows::core::Error::from_thread(),
+            });
         }
         let module_path = OsString::from_wide(&module_path);
 
@@ -171,18 +178,17 @@ pub fn call_remote_export(
             None,
             DONT_RESOLVE_DLL_REFERENCES,
         )
-        .context("failed to load library")?;
+        .map_err(|e| Error::LoadLibrary { source: e })?;
 
         // Get the address of the export in our local copy of the DLL
-        let export_name_cstr =
-            std::ffi::CString::new(export_name).context("Invalid export name")?;
+        let export_name_cstr = std::ffi::CString::new(export_name)?;
         let local_addr =
             GetProcAddress(local_module, PCSTR(export_name_cstr.as_ptr() as *const u8));
         let Some(local_addr) = local_addr else {
-            anyhow::bail!(
-                "Failed to locate remote call export: {:?}",
-                windows::core::Error::from_thread()
-            );
+            return Err(Error::ExportNotFound {
+                export_name: export_name.to_string(),
+                source: windows::core::Error::from_thread(),
+            });
         };
 
         // Calculate the remote address by subtracting the local module base
@@ -204,7 +210,10 @@ pub fn call_remote_export(
                 0,
                 None,
             )
-            .context("Failed to create remote call thread")?,
+            .map_err(|e| Error::CreateRemoteThread {
+                context: "remote export call".to_string(),
+                source: e,
+            })?,
         );
 
         // Wait for the thread to complete
@@ -215,28 +224,19 @@ pub fn call_remote_export(
 
         match result {
             WAIT_OBJECT_0 => Ok(()),
-            WAIT_TIMEOUT => {
-                anyhow::bail!("Remote call thread timed out");
-            }
-            WAIT_ABANDONED => {
-                anyhow::bail!("Remote call thread was abandoned");
-            }
-            _ => {
-                anyhow::bail!("Waiting for remote call thread failed: {}", result.0);
-            }
+            WAIT_TIMEOUT => Err(Error::RemoteCallTimeout),
+            WAIT_ABANDONED => Err(Error::RemoteCallAbandoned),
+            _ => Err(Error::RemoteCallWaitFailed { result: result.0 }),
         }
     }
 }
 
 /// Returns the base address of a module in a remote process.
-pub fn get_remote_module_base(
-    process_id: u32,
-    module_path: &Path,
-) -> anyhow::Result<Option<NonNull<u8>>> {
+pub fn get_remote_module_base(process_id: u32, module_path: &Path) -> Result<Option<NonNull<u8>>> {
     let th = unsafe {
         Owned::new(
             CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process_id)
-                .context("failed to create snapshot")?,
+                .map_err(|e| Error::CreateSnapshot { source: e })?,
         )
     };
 
@@ -247,10 +247,10 @@ pub fn get_remote_module_base(
 
     let module_path = module_path
         .canonicalize()
-        .context("failed to canonicalize module path")?;
+        .map_err(|e| Error::CanonicalizePath { source: e })?;
 
     unsafe {
-        Module32FirstW(*th, &mut entry).context("failed to get first module")?;
+        Module32FirstW(*th, &mut entry).map_err(|e| Error::GetFirstModule { source: e })?;
 
         loop {
             let len = entry
@@ -259,7 +259,9 @@ pub fn get_remote_module_base(
                 .position(|&c| c == 0)
                 .unwrap_or(entry.szExePath.len());
 
-            if PathBuf::from(&*OsString::from_wide(&entry.szExePath[..len])).canonicalize()?
+            if PathBuf::from(&*OsString::from_wide(&entry.szExePath[..len]))
+                .canonicalize()
+                .map_err(|e| Error::CanonicalizePath { source: e })?
                 == module_path
             {
                 return Ok(NonNull::new(entry.modBaseAddr));

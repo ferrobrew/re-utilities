@@ -7,8 +7,6 @@ edition = "2021"
 steamlocate = "=2.0.0-beta.2"
 dunce = "1.0"
 
-anyhow = { workspace = true }
-
 [dependencies.windows]
 features = [
     "Win32_System_Threading",

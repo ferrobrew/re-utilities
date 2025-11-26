@@ -1,6 +1,5 @@
 use std::mem;
 
-use anyhow::Context;
 use windows::Win32::{
     Foundation::{CloseHandle, HANDLE},
     System::{
@@ -14,15 +13,17 @@ use windows::Win32::{
     },
 };
 
+use crate::error::{Error, Result};
+
 pub struct ThreadSuspender {
     threads: Vec<HANDLE>,
 }
 impl ThreadSuspender {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Result<Self> {
         let process_id = unsafe { GetCurrentProcessId() };
         let handle = unsafe {
             CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id)
-                .context("failed to create snapshot of process")?
+                .map_err(|e| Error::ThreadSnapshotFailed { source: e })?
         };
 
         fn from_snapshot<Value: Default + Copy + Sized>(
@@ -51,8 +52,11 @@ impl ThreadSuspender {
             .filter(|thread| {
                 thread.th32OwnerProcessID == process_id && thread.th32ThreadID != thread_id
             })
-            .map(|thread| unsafe { OpenThread(THREAD_ALL_ACCESS, false, thread.th32ThreadID) })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|thread| unsafe {
+                OpenThread(THREAD_ALL_ACCESS, false, thread.th32ThreadID)
+                    .map_err(|e| Error::ThreadOpenFailed { source: e })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Self::suspend(&threads);
         Ok(Self { threads })
@@ -78,7 +82,7 @@ impl ThreadSuspender {
             unsafe { CloseHandle(*handle).unwrap() };
         }
     }
-    pub fn for_block<T>(mut f: impl FnMut() -> anyhow::Result<T>) -> anyhow::Result<T> {
+    pub fn for_block<T>(mut f: impl FnMut() -> Result<T>) -> Result<T> {
         let _suspender = ThreadSuspender::new()?;
         f()
     }

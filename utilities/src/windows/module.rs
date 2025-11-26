@@ -9,7 +9,7 @@ use windows::Win32::{
     },
 };
 
-use anyhow::anyhow;
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum CacheKey {
@@ -102,7 +102,7 @@ impl Module {
     }
 
     #[allow(dead_code)]
-    pub fn hash(&self) -> anyhow::Result<u64> {
+    pub fn hash(&self) -> Result<u64> {
         use std::{collections::hash_map::DefaultHasher, fs::File, hash::Hasher};
 
         struct HashWriter<T: Hasher>(T);
@@ -122,10 +122,7 @@ impl Module {
             }
         }
 
-        let input = File::open(
-            self.path()
-                .ok_or_else(|| anyhow!("can't open module for hashing"))?,
-        )?;
+        let input = File::open(self.path().ok_or(Error::ModulePathUnavailable)?)?;
         let mut reader = io::BufReader::new(input);
 
         let mut hw = HashWriter(DefaultHasher::new());
@@ -134,12 +131,15 @@ impl Module {
         Ok(hw.0.finish())
     }
 
-    pub fn scan(&mut self, pattern: &str) -> anyhow::Result<*mut u8> {
+    pub fn scan(&mut self, pattern: &str) -> Result<*mut u8> {
         let offset = if let Some(offset) = self.cache.get(&CacheKey::Regular(pattern.to_owned())) {
             *offset
         } else {
-            patternscan::scan_first_match(io::Cursor::new(self.as_bytes()), pattern)?
-                .ok_or_else(|| anyhow!("failed to scan"))?
+            patternscan::scan_first_match(io::Cursor::new(self.as_bytes()), pattern)?.ok_or(
+                Error::PatternScanFailed {
+                    context: Some(format!("pattern: {}", pattern)),
+                },
+            )?
         };
 
         self.cache
@@ -148,11 +148,7 @@ impl Module {
         Ok(self.rel_to_abs_addr(offset))
     }
 
-    pub fn scan_for_relative_callsite(
-        &self,
-        pattern: &str,
-        addr_offset: usize,
-    ) -> anyhow::Result<*mut u8> {
+    pub fn scan_for_relative_callsite(&self, pattern: &str, addr_offset: usize) -> Result<*mut u8> {
         let offset = if let Some(offset) = self
             .cache
             .get(&CacheKey::RelativeCallsite(pattern.to_owned()))
@@ -160,7 +156,9 @@ impl Module {
             *offset
         } else {
             let offset = patternscan::scan_first_match(io::Cursor::new(self.as_bytes()), pattern)?
-                .ok_or_else(|| anyhow!("failed to scan"))?;
+                .ok_or(Error::PatternScanFailed {
+                    context: Some(format!("pattern: {}", pattern)),
+                })?;
             let base = self.rel_to_abs_addr(offset + addr_offset);
             let call = unsafe { slice::from_raw_parts(base as *const u8, 4) };
             let offset = i32::from_ne_bytes(call.try_into()?) + 4;
@@ -173,7 +171,7 @@ impl Module {
     }
 
     #[allow(dead_code)]
-    pub fn scan_after_ptr(&mut self, base: *const u8, pattern: &str) -> anyhow::Result<*mut u8> {
+    pub fn scan_after_ptr(&mut self, base: *const u8, pattern: &str) -> Result<*mut u8> {
         let base_offset = self.abs_to_rel_addr(base) as usize;
 
         let offset = if let Some(offset) = self
@@ -185,7 +183,9 @@ impl Module {
             let slice = &self.as_bytes()[base_offset..];
 
             let offset_from_base = patternscan::scan_first_match(io::Cursor::new(slice), pattern)?
-                .ok_or_else(|| anyhow!("failed to scan"))?;
+                .ok_or(Error::PatternScanFailed {
+                    context: Some(format!("pattern: {}", pattern)),
+                })?;
 
             base_offset + offset_from_base
         };

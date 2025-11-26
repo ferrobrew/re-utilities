@@ -1,3 +1,4 @@
+pub mod error;
 pub mod util;
 
 #[cfg(target_os = "windows")]
@@ -9,5 +10,4 @@ pub use crate::windows::*;
 #[cfg(target_os = "windows")]
 pub use retour;
 
-#[cfg(target_os = "windows")]
-pub use anyhow;
+pub use error::{Error, Result};

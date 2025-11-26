@@ -4,8 +4,6 @@ name = "re-utilities"
 version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
-
 patternscan = "1.2.0"
 retour = { git = "https://github.com/Hpmason/retour-rs.git" }
 

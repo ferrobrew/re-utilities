@@ -1,10 +1,11 @@
-use anyhow::Context;
 use std::path::{Path, PathBuf};
 
 use windows::{
     core::{Owned, HSTRING, PWSTR},
     Win32::{Foundation::HANDLE, System::Threading},
 };
+
+use crate::error::{Error, Result};
 
 /// An owned variant of `Threading::PROCESS_INFORMATION`.
 pub struct ProcessInformation {
@@ -31,7 +32,7 @@ pub fn arbitrary_process<'a>(
     env_vars: impl IntoIterator<Item = (String, String)>,
     args: impl IntoIterator<Item = &'a str>,
     create_suspended: bool,
-) -> anyhow::Result<ProcessInformation> {
+) -> Result<ProcessInformation> {
     let startup_info = Threading::STARTUPINFOW::default();
     let mut process_info = Threading::PROCESS_INFORMATION::default();
 
@@ -79,7 +80,7 @@ pub fn arbitrary_process<'a>(
             &mut process_info,
         )
         .map(|_| process_info.into())
-        .context("failed to spawn process")
+        .map_err(|e| Error::SpawnProcess { source: e })
     }
 }
 
@@ -89,12 +90,12 @@ pub fn steam_process<'a>(
     executable_path_builder: impl Fn(&Path) -> PathBuf + Copy,
     args: impl IntoIterator<Item = &'a str>,
     create_suspended: bool,
-) -> anyhow::Result<ProcessInformation> {
+) -> Result<ProcessInformation> {
     let steam_dir = steamlocate::SteamDir::locate()?;
 
     let (app, library) = steam_dir
         .find_app(app_id)?
-        .context("failed to locate app")?;
+        .ok_or(Error::SteamAppNotFound { app_id })?;
     let game_path = library.resolve_app_dir(&app);
     let executable_path = executable_path_builder(&game_path);
 

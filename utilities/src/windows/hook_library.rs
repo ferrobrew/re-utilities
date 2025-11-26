@@ -3,7 +3,7 @@ use super::{
     patcher::Patcher,
 };
 
-use anyhow::Context;
+use crate::error::{Error, Result};
 
 #[allow(clippy::type_complexity)]
 pub struct HookLibrary {
@@ -49,8 +49,8 @@ impl HookLibrary {
     }
     pub fn with_callbacks(
         self,
-        enable: impl Fn() -> anyhow::Result<()> + Send + Sync + 'static,
-        disable: impl Fn() -> anyhow::Result<()> + Send + Sync + 'static,
+        enable: impl Fn() -> Result<()> + Send + Sync + 'static,
+        disable: impl Fn() -> Result<()> + Send + Sync + 'static,
     ) -> Self {
         self.with_runtime_binder(Box::new(RuntimeDetourBinder {
             enable: Box::new(enable),
@@ -62,7 +62,7 @@ impl HookLibrary {
         self
     }
 
-    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> anyhow::Result<()> {
+    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> Result<()> {
         if enabled {
             for binder in self.binders() {
                 binder.enable()?;
@@ -75,7 +75,9 @@ impl HookLibrary {
         } else {
             for (address, _) in &self.patches {
                 unsafe {
-                    patcher.unpatch(*address).context("failed to unpatch")?;
+                    patcher
+                        .unpatch(*address)
+                        .ok_or(Error::UnpatchFailed { address: *address })?;
                 }
             }
             for binder in self.binders() {
@@ -111,13 +113,13 @@ impl HookLibraries {
     pub fn new(libraries: impl Into<Vec<HookLibrary>>) -> HookLibraries {
         HookLibraries(libraries.into())
     }
-    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> anyhow::Result<()> {
+    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> Result<()> {
         for library in &self.0 {
             library.set_enabled(patcher, enabled)?;
         }
         Ok(())
     }
-    pub fn enable(self, patcher: &mut Patcher) -> anyhow::Result<Self> {
+    pub fn enable(self, patcher: &mut Patcher) -> Result<Self> {
         self.set_enabled(patcher, true)?;
         Ok(self)
     }
