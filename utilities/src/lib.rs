@@ -10,4 +10,4 @@ pub use crate::windows::*;
 #[cfg(target_os = "windows")]
 pub use retour;
 
-pub use error::{Error, Result};
+pub use error::{Error, Result, UserCallbackResult};

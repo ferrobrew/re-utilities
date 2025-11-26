@@ -165,3 +165,6 @@ impl From<WindowsError> for Error {
 
 /// Result type alias for re-utilities operations
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Result type alias for user-provided callbacks
+pub type UserCallbackResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;

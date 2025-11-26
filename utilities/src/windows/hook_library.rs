@@ -1,23 +1,43 @@
+use std::fmt;
+
 use super::{
-    detour_binder::{DetourBinder, RuntimeDetourBinder, UserResult},
+    detour_binder::{DetourBinder, RuntimeDetourBinder},
     patcher::Patcher,
 };
 
-use crate::error::Error;
+use crate::error::{Error, UserCallbackResult};
 
-/// Type alias for results that can contain any error type
-pub type BoxedResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+/// Error type for HookLibrary operations
+#[derive(Debug)]
+pub enum HookLibraryError {
+    /// Standard library error
+    Standard(Error),
+    /// User callback error
+    UserCallback(Box<dyn std::error::Error + Send + Sync>),
+}
 
-struct UserCallback {
-    enable: Box<dyn Fn() -> UserResult<()> + Send + Sync>,
-    disable: Box<dyn Fn() -> UserResult<()> + Send + Sync>,
+impl fmt::Display for HookLibraryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HookLibraryError::Standard(e) => write!(f, "{}", e),
+            HookLibraryError::UserCallback(e) => write!(f, "user callback error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for HookLibraryError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            HookLibraryError::Standard(e) => e.source(),
+            HookLibraryError::UserCallback(e) => e.source(),
+        }
+    }
 }
 
 #[allow(clippy::type_complexity)]
 pub struct HookLibrary {
     static_binders: Vec<&'static dyn DetourBinder>,
     runtime_binders: Vec<Box<dyn DetourBinder>>,
-    user_callbacks: Vec<UserCallback>,
     patches: Vec<(usize, Vec<u8>)>,
 }
 impl HookLibrary {
@@ -26,7 +46,6 @@ impl HookLibrary {
         HookLibrary {
             static_binders: vec![],
             runtime_binders: vec![],
-            user_callbacks: vec![],
             patches: vec![],
         }
     }
@@ -43,43 +62,33 @@ impl HookLibrary {
         detour: &'static retour::GenericDetour<F>,
     ) -> Self {
         self.with_runtime_binder(Box::new(RuntimeDetourBinder {
-            enable: Box::new(|| {
-                unsafe {
-                    detour.enable()?;
-                }
-                Ok(())
-            }),
-            disable: Box::new(|| {
-                unsafe {
-                    detour.disable()?;
-                }
-                Ok(())
-            }),
+            enable: Box::new(|| unsafe { detour.enable().map_err(|e| Box::new(e) as _) }),
+            disable: Box::new(|| unsafe { detour.disable().map_err(|e| Box::new(e) as _) }),
         }))
     }
     pub fn with_callbacks(
-        mut self,
-        enable: impl Fn() -> UserResult<()> + Send + Sync + 'static,
-        disable: impl Fn() -> UserResult<()> + Send + Sync + 'static,
+        self,
+        enable: impl Fn() -> UserCallbackResult<()> + Send + Sync + 'static,
+        disable: impl Fn() -> UserCallbackResult<()> + Send + Sync + 'static,
     ) -> Self {
-        self.user_callbacks.push(UserCallback {
+        self.with_runtime_binder(Box::new(RuntimeDetourBinder {
             enable: Box::new(enable),
             disable: Box::new(disable),
-        });
-        self
+        }))
     }
     pub fn with_patch(mut self, address: usize, bytes: &[u8]) -> Self {
         self.patches.push((address, bytes.to_owned()));
         self
     }
 
-    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> BoxedResult<()> {
+    pub fn set_enabled(
+        &self,
+        patcher: &mut Patcher,
+        enabled: bool,
+    ) -> Result<(), HookLibraryError> {
         if enabled {
             for binder in self.binders() {
-                binder.enable()?;
-            }
-            for cb in &self.user_callbacks {
-                (cb.enable)()?;
+                binder.enable().map_err(HookLibraryError::UserCallback)?;
             }
             for (address, patch) in &self.patches {
                 unsafe {
@@ -89,16 +98,13 @@ impl HookLibrary {
         } else {
             for (address, _) in &self.patches {
                 unsafe {
-                    patcher
-                        .unpatch(*address)
-                        .ok_or(Error::UnpatchFailed { address: *address })?;
+                    patcher.unpatch(*address).ok_or_else(|| {
+                        HookLibraryError::Standard(Error::UnpatchFailed { address: *address })
+                    })?;
                 }
             }
-            for cb in &self.user_callbacks {
-                (cb.disable)()?;
-            }
             for binder in self.binders() {
-                binder.disable()?;
+                binder.disable().map_err(HookLibraryError::UserCallback)?;
             }
         }
         Ok(())
@@ -119,9 +125,6 @@ impl Default for HookLibrary {
 }
 impl Drop for HookLibrary {
     fn drop(&mut self) {
-        for cb in &self.user_callbacks {
-            let _ = (cb.disable)();
-        }
         for binder in self.binders() {
             let _ = binder.disable();
         }
@@ -133,13 +136,17 @@ impl HookLibraries {
     pub fn new(libraries: impl Into<Vec<HookLibrary>>) -> HookLibraries {
         HookLibraries(libraries.into())
     }
-    pub fn set_enabled(&self, patcher: &mut Patcher, enabled: bool) -> BoxedResult<()> {
+    pub fn set_enabled(
+        &self,
+        patcher: &mut Patcher,
+        enabled: bool,
+    ) -> Result<(), HookLibraryError> {
         for library in &self.0 {
             library.set_enabled(patcher, enabled)?;
         }
         Ok(())
     }
-    pub fn enable(self, patcher: &mut Patcher) -> BoxedResult<Self> {
+    pub fn enable(self, patcher: &mut Patcher) -> Result<Self, HookLibraryError> {
         self.set_enabled(patcher, true)?;
         Ok(self)
     }

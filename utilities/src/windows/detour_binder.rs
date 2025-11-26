@@ -1,35 +1,32 @@
-use crate::error::Result;
-
-/// Type alias for user-specified error results
-pub type UserResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+use crate::error::UserCallbackResult;
 
 pub trait DetourBinder {
-    fn enable(&self) -> Result<()>;
-    fn disable(&self) -> Result<()>;
+    fn enable(&self) -> UserCallbackResult<()>;
+    fn disable(&self) -> UserCallbackResult<()>;
 }
 
 pub struct CompiletimeDetourBinder {
-    pub enable: &'static (dyn Send + Sync + Fn() -> Result<()>),
-    pub disable: &'static (dyn Send + Sync + Fn() -> Result<()>),
+    pub enable: &'static (dyn Send + Sync + Fn() -> UserCallbackResult<()>),
+    pub disable: &'static (dyn Send + Sync + Fn() -> UserCallbackResult<()>),
 }
 impl DetourBinder for CompiletimeDetourBinder {
-    fn enable(&self) -> Result<()> {
+    fn enable(&self) -> UserCallbackResult<()> {
         (self.enable)()
     }
-    fn disable(&self) -> Result<()> {
+    fn disable(&self) -> UserCallbackResult<()> {
         (self.disable)()
     }
 }
 
 pub struct RuntimeDetourBinder {
-    pub enable: Box<dyn Send + Sync + Fn() -> Result<()>>,
-    pub disable: Box<dyn Send + Sync + Fn() -> Result<()>>,
+    pub enable: Box<dyn Send + Sync + Fn() -> UserCallbackResult<()>>,
+    pub disable: Box<dyn Send + Sync + Fn() -> UserCallbackResult<()>>,
 }
 impl DetourBinder for RuntimeDetourBinder {
-    fn enable(&self) -> Result<()> {
+    fn enable(&self) -> UserCallbackResult<()> {
         (self.enable)()
     }
-    fn disable(&self) -> Result<()> {
+    fn disable(&self) -> UserCallbackResult<()> {
         (self.disable)()
     }
 }
