@@ -13,7 +13,7 @@ use windows::Win32::{
     },
 };
 
-use crate::error::{Result, WindowsError};
+use crate::error::{Result, UserCallbackResult, WindowsError};
 
 pub struct ThreadSuspender {
     threads: Vec<HANDLE>,
@@ -85,7 +85,7 @@ impl ThreadSuspender {
             unsafe { CloseHandle(*handle).unwrap() };
         }
     }
-    pub fn for_block<T>(mut f: impl FnMut() -> Result<T>) -> Result<T> {
+    pub fn for_block<T>(mut f: impl FnMut() -> UserCallbackResult<T>) -> UserCallbackResult<T> {
         let _suspender = ThreadSuspender::new()?;
         f()
     }
