@@ -86,7 +86,7 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
         if alloc.is_null() {
             anyhow::bail!(
                 "failed to allocate memory in remote process: {:?}",
-                windows::core::Error::from_win32()
+                windows::core::Error::from_thread()
             );
         }
 
@@ -108,7 +108,7 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> anyhow::Result<PathBuf> {
         let Some(load_library) = load_library else {
             anyhow::bail!(
                 "failed to get LoadLibraryW address: {:?}",
-                windows::core::Error::from_win32()
+                windows::core::Error::from_thread()
             );
         };
 
@@ -151,14 +151,14 @@ pub fn call_remote_export(
         // Get the module file name from the remote process
         let mut module_path = [0u16; MAX_PATH as usize];
         let result = GetModuleFileNameExW(
-            process,
-            HMODULE(remote_module_base.as_ptr() as *mut std::ffi::c_void),
+            Some(process),
+            Some(HMODULE(remote_module_base.as_ptr() as *mut std::ffi::c_void)),
             &mut module_path,
         );
         if result == 0 {
             anyhow::bail!(
                 "Failed to get remote export call module path: {:?}",
-                windows::core::Error::from_win32()
+                windows::core::Error::from_thread()
             );
         }
         let module_path = OsString::from_wide(&module_path);
@@ -181,7 +181,7 @@ pub fn call_remote_export(
         let Some(local_addr) = local_addr else {
             anyhow::bail!(
                 "Failed to locate remote call export: {:?}",
-                windows::core::Error::from_win32()
+                windows::core::Error::from_thread()
             );
         };
 

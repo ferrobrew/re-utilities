@@ -51,7 +51,7 @@ impl Module {
             handle,
             path: {
                 let mut buf = [0u16; 1024];
-                let size = unsafe { GetModuleFileNameW(handle, &mut buf) } as usize;
+                let size = unsafe { GetModuleFileNameW(Some(handle), &mut buf) } as usize;
                 let os = OsString::from_wide(&buf[0..size]);
                 os.into_string().ok()
             },
