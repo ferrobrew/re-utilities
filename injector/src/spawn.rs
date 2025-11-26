@@ -68,7 +68,7 @@ pub fn arbitrary_process<'a>(
         let current_directory = HSTRING::from(game_path.as_os_str());
         Threading::CreateProcessW(
             &application_name,
-            PWSTR::from_raw(commandline.as_mut_ptr()),
+            Some(PWSTR::from_raw(commandline.as_mut_ptr())),
             None,
             None,
             false,
