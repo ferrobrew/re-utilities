@@ -3,7 +3,6 @@ members = ["detours-macro", "injector", "utilities"]
 resolver = "2"
 
 [workspace.dependencies]
-anyhow = "1.0"
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "1.0", features = ["full"] }

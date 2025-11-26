@@ -146,8 +146,20 @@ pub fn detour(
                 Span::call_site(),
             );
             quote! {
-                use anyhow::Context;
-                let address = module.scan(#addr_sig).context(#error_string)?;
+                let address = module.scan(#addr_sig).map_err(|e| {
+                    match e {
+                        ::re_utilities::Error::PatternScanFailed { context } => {
+                            ::re_utilities::Error::PatternScanFailed {
+                                context: Some(format!(
+                                    "{}: {}",
+                                    #error_string,
+                                    context.unwrap_or_default()
+                                )),
+                            }
+                        }
+                        other => other,
+                    }
+                })?;
             }
         }
         Address::Address(address) => quote! {

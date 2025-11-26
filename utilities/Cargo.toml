@@ -4,12 +4,12 @@ name = "re-utilities"
 version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
-
 patternscan = "1.2.0"
+
+[target.'cfg(windows)'.dependencies]
 retour = { git = "https://github.com/Hpmason/retour-rs.git" }
 
-[dependencies.windows]
+[target.'cfg(windows)'.dependencies.windows]
 features = [
   "Win32_Foundation",
   "Win32_Security",

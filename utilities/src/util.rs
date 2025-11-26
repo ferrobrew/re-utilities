@@ -17,7 +17,7 @@ macro_rules! singleton {
         static mut INSTANCE: Option<$class_name> = None;
 
         impl $class_name {
-            pub fn create($($arg_name : $arg_type),*) -> anyhow::Result<()> {
+            pub fn create($($arg_name : $arg_type),*) -> ::re_utilities::Result<()> {
                 unsafe {
                     INSTANCE = Some(<$class_name>::new( $($arg_name),* )?);
                 }
