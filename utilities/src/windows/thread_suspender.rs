@@ -13,7 +13,7 @@ use windows::Win32::{
     },
 };
 
-use crate::error::{Error, Result};
+use crate::error::{Result, WindowsError};
 
 pub struct ThreadSuspender {
     threads: Vec<HANDLE>,
@@ -22,8 +22,11 @@ impl ThreadSuspender {
     pub fn new() -> Result<Self> {
         let process_id = unsafe { GetCurrentProcessId() };
         let handle = unsafe {
-            CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id)
-                .map_err(|e| Error::ThreadSnapshotFailed { source: e })?
+            CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, process_id).map_err(
+                |e| -> crate::error::Error {
+                    WindowsError::ThreadSnapshotFailed { source: e }.into()
+                },
+            )?
         };
 
         fn from_snapshot<Value: Default + Copy + Sized>(
@@ -54,7 +57,7 @@ impl ThreadSuspender {
             })
             .map(|thread| unsafe {
                 OpenThread(THREAD_ALL_ACCESS, false, thread.th32ThreadID)
-                    .map_err(|e| Error::ThreadOpenFailed { source: e })
+                    .map_err(|e| WindowsError::ThreadOpenFailed { source: e }.into())
             })
             .collect::<Result<Vec<_>>>()?;
 

@@ -1,3 +1,5 @@
+#![cfg(target_os = "windows")]
+
 use std::{
     ffi::OsString,
     os::windows::ffi::{OsStrExt, OsStringExt},
@@ -38,7 +40,7 @@ use windows::{
 pub mod error;
 pub mod spawn;
 
-pub use error::{Error, Result};
+pub use error::{Error, Result, SteamError, WindowsError};
 
 /// Injects a DLL into a process. To get a process handle, use [`get_processes_by_name`] or
 /// functions from [`spawn`].
@@ -86,9 +88,10 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> Result<PathBuf> {
             PAGE_EXECUTE_READWRITE,
         );
         if alloc.is_null() {
-            return Err(Error::RemoteMemoryAllocation {
+            return Err(WindowsError::RemoteMemoryAllocation {
                 source: windows::core::Error::from_thread(),
-            });
+            }
+            .into());
         }
 
         // Write the DLL path to the target process
@@ -100,20 +103,21 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> Result<PathBuf> {
             dll_path.len() * std::mem::size_of::<u16>(),
             Some(&mut bytes_written),
         )
-        .map_err(|e| Error::WriteMemory { source: e })?;
+        .map_err(|e| WindowsError::WriteMemory { source: e })?;
 
         // Get the address of LoadLibraryW
         let kernel32_module =
-            GetModuleHandleW(w!("kernel32.dll")).map_err(|e| Error::GetModuleHandle {
+            GetModuleHandleW(w!("kernel32.dll")).map_err(|e| WindowsError::GetModuleHandle {
                 module: "kernel32.dll".to_string(),
                 source: e,
             })?;
         let load_library = GetProcAddress(kernel32_module, s!("LoadLibraryW"));
         let Some(load_library) = load_library else {
-            return Err(Error::GetProcAddress {
+            return Err(WindowsError::GetProcAddress {
                 procedure: "LoadLibraryW".to_string(),
                 source: windows::core::Error::from_thread(),
-            });
+            }
+            .into());
         };
 
         // Create a remote thread to load the DLL
@@ -128,7 +132,7 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> Result<PathBuf> {
                 0,
                 None,
             )
-            .map_err(|e| Error::CreateRemoteThread {
+            .map_err(|e| WindowsError::CreateRemoteThread {
                 context: "DLL injection".to_string(),
                 source: e,
             })?,
@@ -137,12 +141,12 @@ pub fn inject(process: HANDLE, payload_path: &Path) -> Result<PathBuf> {
         // Wait for thread to finish
         let result = WaitForSingleObject(*thread_handle, 5000);
         if result == WAIT_ABANDONED || result == WAIT_TIMEOUT || result.0 == INFINITE {
-            return Err(Error::InjectionWaitFailed { result: result.0 });
+            return Err(WindowsError::InjectionWaitFailed { result: result.0 }.into());
         }
 
         // Free memory
         VirtualFreeEx(process, alloc, 0, MEM_RELEASE)
-            .map_err(|e| Error::FreeMemory { source: e })?;
+            .map_err(|e| WindowsError::FreeMemory { source: e })?;
     }
 
     Ok(injected_payload_path)
@@ -164,9 +168,10 @@ pub fn call_remote_export(
             &mut module_path,
         );
         if result == 0 {
-            return Err(Error::GetRemoteModuleFileName {
+            return Err(WindowsError::GetRemoteModuleFileName {
                 source: windows::core::Error::from_thread(),
-            });
+            }
+            .into());
         }
         let module_path = OsString::from_wide(&module_path);
 
@@ -178,17 +183,18 @@ pub fn call_remote_export(
             None,
             DONT_RESOLVE_DLL_REFERENCES,
         )
-        .map_err(|e| Error::LoadLibrary { source: e })?;
+        .map_err(|e| WindowsError::LoadLibrary { source: e })?;
 
         // Get the address of the export in our local copy of the DLL
         let export_name_cstr = std::ffi::CString::new(export_name)?;
         let local_addr =
             GetProcAddress(local_module, PCSTR(export_name_cstr.as_ptr() as *const u8));
         let Some(local_addr) = local_addr else {
-            return Err(Error::ExportNotFound {
+            return Err(WindowsError::ExportNotFound {
                 export_name: export_name.to_string(),
                 source: windows::core::Error::from_thread(),
-            });
+            }
+            .into());
         };
 
         // Calculate the remote address by subtracting the local module base
@@ -210,7 +216,7 @@ pub fn call_remote_export(
                 0,
                 None,
             )
-            .map_err(|e| Error::CreateRemoteThread {
+            .map_err(|e| WindowsError::CreateRemoteThread {
                 context: "remote export call".to_string(),
                 source: e,
             })?,
@@ -224,9 +230,9 @@ pub fn call_remote_export(
 
         match result {
             WAIT_OBJECT_0 => Ok(()),
-            WAIT_TIMEOUT => Err(Error::RemoteCallTimeout),
-            WAIT_ABANDONED => Err(Error::RemoteCallAbandoned),
-            _ => Err(Error::RemoteCallWaitFailed { result: result.0 }),
+            WAIT_TIMEOUT => Err(WindowsError::RemoteCallTimeout.into()),
+            WAIT_ABANDONED => Err(WindowsError::RemoteCallAbandoned.into()),
+            _ => Err(WindowsError::RemoteCallWaitFailed { result: result.0 }.into()),
         }
     }
 }
@@ -236,7 +242,7 @@ pub fn get_remote_module_base(process_id: u32, module_path: &Path) -> Result<Opt
     let th = unsafe {
         Owned::new(
             CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, process_id)
-                .map_err(|e| Error::CreateSnapshot { source: e })?,
+                .map_err(|e| WindowsError::CreateSnapshot { source: e })?,
         )
     };
 
@@ -250,7 +256,7 @@ pub fn get_remote_module_base(process_id: u32, module_path: &Path) -> Result<Opt
         .map_err(|e| Error::CanonicalizePath { source: e })?;
 
     unsafe {
-        Module32FirstW(*th, &mut entry).map_err(|e| Error::GetFirstModule { source: e })?;
+        Module32FirstW(*th, &mut entry).map_err(|e| WindowsError::GetFirstModule { source: e })?;
 
         loop {
             let len = entry

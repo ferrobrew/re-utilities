@@ -1,5 +1,8 @@
 use crate::error::Result;
 
+/// Type alias for user-specified error results
+pub type UserResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
 pub trait DetourBinder {
     fn enable(&self) -> Result<()>;
     fn disable(&self) -> Result<()>;

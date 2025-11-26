@@ -5,7 +5,7 @@ use windows::{
     Win32::{Foundation::HANDLE, System::Threading},
 };
 
-use crate::error::{Error, Result};
+use crate::error::{Result, SteamError, WindowsError};
 
 /// An owned variant of `Threading::PROCESS_INFORMATION`.
 pub struct ProcessInformation {
@@ -80,7 +80,7 @@ pub fn arbitrary_process<'a>(
             &mut process_info,
         )
         .map(|_| process_info.into())
-        .map_err(|e| Error::SpawnProcess { source: e })
+        .map_err(|e| WindowsError::SpawnProcess { source: e }.into())
     }
 }
 
@@ -95,7 +95,7 @@ pub fn steam_process<'a>(
 
     let (app, library) = steam_dir
         .find_app(app_id)?
-        .ok_or(Error::SteamAppNotFound { app_id })?;
+        .ok_or(SteamError::AppNotFound { app_id })?;
     let game_path = library.resolve_app_dir(&app);
     let executable_path = executable_path_builder(&game_path);
 
