@@ -4,13 +4,15 @@ use proc_macro2::Span;
 use quote::quote;
 use regex::Regex;
 use syn::{
-    parse_macro_input, AttributeArgs, BareFnArg, Error, FnArg, Ident, ItemFn, Lit, LitStr, Meta,
-    NestedMeta, Result, TypeBareFn,
+    parse_macro_input, punctuated::Punctuated, BareFnArg, Error, Expr, ExprAssign, ExprLit,
+    ExprPath, FnArg, Ident, ItemFn, Lit, LitStr, Result, Token, TypeBareFn,
 };
 
 enum Address {
     Signature(String),
-    Address(usize),
+    /// An arbitrary expression evaluating to a `usize` address: an integer literal
+    /// (`0x1234`) or a path to a constant (`some::module::Type::FN_ADDRESS`).
+    Address(Box<Expr>),
 }
 
 struct Args {
@@ -23,73 +25,62 @@ fn pattern_regex() -> &'static Regex {
 }
 
 impl Args {
-    fn new(args: AttributeArgs) -> Result<Self> {
+    fn new(args: Punctuated<Expr, Token![,]>) -> Result<Self> {
         let mut address = None;
 
         for arg in args {
-            match arg {
-                NestedMeta::Meta(Meta::NameValue(nv)) => {
-                    if nv.path.is_ident("pattern") {
-                        if address.is_some() {
-                            return Err(Error::new_spanned(
-                                nv.path,
-                                "address has already been specified",
-                            ));
-                        }
+            let Expr::Assign(ExprAssign { left, right, .. }) = arg else {
+                return Err(Error::new_spanned(arg, "expected `name = value`"));
+            };
+            let Expr::Path(ExprPath { path, .. }) = left.as_ref() else {
+                return Err(Error::new_spanned(&left, "expected an attribute name"));
+            };
 
-                        if let Lit::Str(lit) = nv.lit {
-                            if pattern_regex().is_match(&lit.value()) {
-                                address = Some(Address::Signature(lit.value().to_owned()));
-                            } else {
-                                return Err(Error::new_spanned(
-                                    lit,
-                                    "`pattern` is invalid, does not match pattern format (`DE ? BE EF`)",
-                                ));
-                            }
-                        } else {
-                            return Err(Error::new_spanned(
-                                nv.lit,
-                                "`pattern` must be literal string",
-                            ));
-                        }
-                    } else if nv.path.is_ident("address") {
-                        if address.is_some() {
-                            return Err(Error::new_spanned(
-                                nv.path,
-                                "address has already been specified",
-                            ));
-                        }
+            if path.is_ident("pattern") {
+                if address.is_some() {
+                    return Err(Error::new_spanned(
+                        path,
+                        "address has already been specified",
+                    ));
+                }
 
-                        if let Lit::Int(lit) = nv.lit {
-                            if let Ok(value) = lit.base10_parse() {
-                                address = Some(Address::Address(value));
-                            } else {
-                                return Err(Error::new_spanned(
-                                    lit,
-                                    "`address` is an invalid integer",
-                                ));
-                            }
-                        } else {
-                            return Err(Error::new_spanned(
-                                nv.lit,
-                                "`pattern` must be literal string",
-                            ));
-                        }
+                if let Expr::Lit(ExprLit {
+                    lit: Lit::Str(lit), ..
+                }) = right.as_ref()
+                {
+                    if pattern_regex().is_match(&lit.value()) {
+                        address = Some(Address::Signature(lit.value()));
                     } else {
                         return Err(Error::new_spanned(
-                            nv.path.clone(),
-                            "unknown attribute".to_string(),
+                            lit,
+                            "`pattern` is invalid, does not match pattern format (`DE ? BE EF`)",
                         ));
                     }
+                } else {
+                    return Err(Error::new_spanned(
+                        &right,
+                        "`pattern` must be a literal string",
+                    ));
                 }
-                arg => {
-                    return Err(Error::new_spanned(arg, "unknown attribute".to_string()));
+            } else if path.is_ident("address") {
+                if address.is_some() {
+                    return Err(Error::new_spanned(
+                        path,
+                        "address has already been specified",
+                    ));
                 }
+
+                // Accept any expression evaluating to a `usize`: an integer literal
+                // (`0x1234`) or a path to a constant (`Type::FN_ADDRESS`).
+                address = Some(Address::Address(right));
+            } else {
+                return Err(Error::new_spanned(path, "unknown attribute"));
             }
         }
 
         Ok(Self {
-            address: address.expect("missing `address` attribute"),
+            address: address
+                .ok_or_else(|| Error::new(Span::call_site(), "missing `address` attribute"))?,
         })
     }
 }
@@ -100,7 +91,9 @@ pub fn detour(
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     // Extract arguments
-    let args = match Args::new(parse_macro_input!(args as AttributeArgs)) {
+    let args = match Args::new(parse_macro_input!(
+        args with Punctuated::<Expr, Token![,]>::parse_terminated
+    )) {
         Ok(gen) => gen,
         Err(err) => return err.to_compile_error().into(),
     };
@@ -162,9 +155,12 @@ pub fn detour(
                 })?;
             }
         }
-        Address::Address(address) => quote! {
-            let address = #address;
-        },
+        Address::Address(expr) => {
+            let expr = *expr;
+            quote! {
+                let address: usize = #expr;
+            }
+        }
     };
 
     quote! {
